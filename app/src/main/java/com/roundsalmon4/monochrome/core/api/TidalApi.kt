@@ -133,11 +133,16 @@ class TidalApi @Inject constructor(
             String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT))
         } catch (_: Exception) { manifestStr }
 
-        // DASH manifest: extract the first BaseURL from the XML
-        if (decoded.contains("<MPD") || decoded.contains("<BaseURL")) {
-            val baseUrl = Regex("<BaseURL[^>]*>(.*?)</BaseURL>").find(decoded)?.groupValues?.getOrNull(1)
-                ?: throw RuntimeException("No BaseURL found in DASH manifest")
-            return StreamUrl(url = baseUrl, mimeType = "audio/mp4")
+        // DASH manifest: extract stream URL. TIDAL uses SegmentTemplate
+        // with an initialization attribute (a signed URL to the first segment).
+        // If no SegmentTemplate, fall back to BaseURL.
+        if (decoded.contains("<MPD")) {
+            val url = Regex("""initialization="([^"]+)"""").find(decoded)?.groupValues?.getOrNull(1)
+                ?: Regex("<BaseURL[^>]*>(.*?)</BaseURL>").find(decoded)?.groupValues?.getOrNull(1)
+                ?: throw RuntimeException("No stream URL found in DASH manifest")
+            // Unescape HTML entities in URL
+            val clean = url.replace("&amp;", "&")
+            return StreamUrl(url = clean, mimeType = "audio/mp4")
         }
 
         // JSON manifest: extract urls array
