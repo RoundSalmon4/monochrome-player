@@ -1,67 +1,83 @@
 package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
-import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumDetail
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
-import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistDetail
-import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
+import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
+import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistResponseData
 import com.roundsalmon4.monochrome.core.api.internal.dto.TrackItem
 import com.roundsalmon4.monochrome.core.api.model.Album
 import com.roundsalmon4.monochrome.core.api.model.Artist
 import com.roundsalmon4.monochrome.core.api.model.SearchResults
 import com.roundsalmon4.monochrome.core.api.model.StreamUrl
 import com.roundsalmon4.monochrome.core.api.model.Track
+import com.google.gson.GsonBuilder
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
 class TidalApi @Inject constructor(
-    private val service: TidalApiService
+    private val okHttpClient: OkHttpClient,
+    @Named("api.instances") private val baseUrls: List<String>
 ) {
-    suspend fun search(query: String): SearchResults {
-        val response = service.search(query)
-        return SearchResults(
-            tracks = response.tracks?.items?.map { it.toTrack() } ?: emptyList(),
-            artists = response.artists?.items?.map { it.toArtist() } ?: emptyList(),
-            albums = response.albums?.items?.map { it.toAlbum() } ?: emptyList()
-        )
+    private val services: List<TidalApiService> = baseUrls.map { url ->
+        Retrofit.Builder()
+            .baseUrl(url)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create(GsonBuilder().setLenient().create()))
+            .build()
+            .create(TidalApiService::class.java)
     }
 
-    suspend fun searchTracks(query: String): List<Track> {
-        val response = service.searchTracks(query)
-        return response.tracks?.items?.map { it.toTrack() } ?: emptyList()
+    private suspend fun <T> tryInstances(block: suspend (TidalApiService) -> T): T {
+        val errors = mutableListOf<Throwable>()
+        for (service in services) {
+            try {
+                return block(service)
+            } catch (e: Exception) {
+                android.util.Log.w("ChromePlayer", "API instance failed: ${e.message}")
+                errors.add(e)
+            }
+        }
+        throw errors.last()
+    }
+
+    suspend fun search(query: String): SearchResults {
+        val tracks = tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
+        val artists = tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
+        val albums = tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
+        return SearchResults(tracks = tracks, artists = artists, albums = albums)
     }
 
     suspend fun searchAlbums(query: String): List<Album> {
-        val response = service.searchAlbums(query)
-        return response.albums?.items?.map { it.toAlbum() } ?: emptyList()
+        return tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
     suspend fun searchArtists(query: String): List<Artist> {
-        val response = service.searchArtists(query)
-        return response.artists?.items?.map { it.toArtist() } ?: emptyList()
+        return tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
     }
 
     suspend fun getAlbum(albumId: String): Pair<Album, List<Track>> {
-        val response = service.getAlbum(albumId)
-        val detail = response.data?.album ?: response.album ?: throw RuntimeException("Album not found")
-        val album = detail.toAlbum()
-        val rawItems = response.data?.items ?: response.items ?: emptyList()
+        val response = tryInstances { it.getAlbum(albumId) }
+        val d = response.data ?: throw RuntimeException("Album not found")
+        val album = d.toAlbum()
+        var tracks = extractTracks(d.items)
 
-        var tracks = rawItems.mapNotNull { it.item?.toTrack() }
-
-        val totalExpected = detail.numberOfTracks ?: tracks.size
+        val totalExpected = d.numberOfTracks ?: tracks.size
         if (totalExpected > tracks.size) {
             var offset = tracks.size
             val seen = tracks.map { it.id }.toSet()
             while (tracks.size < totalExpected && tracks.size < 10000) {
                 try {
-                    val next = service.getAlbumTracks(albumId, offset)
-                    val nextItems = next.data?.items ?: next.items ?: break
-                    val newTracks = nextItems.mapNotNull { it.item?.toTrack() }
-                    if (newTracks.isEmpty()) break
-                    if (newTracks.first().id in seen) break
+                    val next = tryInstances { it.getAlbumTracks(albumId, offset) }
+                    val newTracks = extractTracks(next.data?.items)
+                    if (newTracks.isEmpty() || newTracks.first().id in seen) break
                     tracks = tracks + newTracks
                     offset += newTracks.size
                 } catch (_: Exception) { break }
@@ -71,22 +87,20 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getArtist(artistId: String): Artist {
-        val response = service.getArtist(artistId)
-        val detail = response.data?.artist ?: response.artist ?: throw RuntimeException("Artist not found")
-        return detail.toArtist()
+        val response = tryInstances { it.getArtist(artistId) }
+        return response.data?.toArtist() ?: throw RuntimeException("Artist not found")
     }
 
     suspend fun getArtistAlbums(artistId: String): List<Album> {
-        val response = service.getArtistAlbums(artistId)
-        val items = response.data?.items ?: response.items ?: emptyList()
-        return items.mapNotNull { it.item?.toAlbum() }.distinctBy { it.id }
+        val response = tryInstances { it.getArtistAlbums(artistId) }
+        return response.data?.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
     suspend fun getTrackStreamUrl(trackId: String): StreamUrl {
-        val response = service.getTrack(trackId)
-        val playbackInfo = response.data?.info ?: response.info ?: throw RuntimeException("No stream info for track $trackId")
+        val response = tryInstances { it.getTrack(trackId) }
+        val data = response.data ?: throw RuntimeException("No stream info for track $trackId")
 
-        val manifestStr = playbackInfo.manifest ?: throw RuntimeException("No manifest for track $trackId")
+        val manifestStr = data.manifest ?: throw RuntimeException("No manifest for track $trackId")
         val decoded = try {
             String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT))
         } catch (_: Exception) { manifestStr }
@@ -99,76 +113,73 @@ class TidalApi @Inject constructor(
                 val manifestJson = gson.fromJson(decoded, Map::class.java)
                 val urls = manifestJson["urls"] as? List<String>
                 urls?.firstOrNull() ?: decoded.trim()
-            } catch (_: Exception) {
-                decoded.trim()
-            }
+            } catch (_: Exception) { decoded.trim() }
         }
 
         return StreamUrl(url = url, mimeType = determineMimeType(url, decoded))
     }
 
-    private fun determineMimeType(url: String, manifest: String): String {
-        return when {
-            url.contains("dash+xml") || manifest.contains("<MPD") -> "application/dash+xml"
-            url.contains("mpegURL") || manifest.contains("#EXTM3U") -> "application/x-mpegURL"
-            else -> "audio/flac"
+    private fun determineMimeType(url: String, manifest: String): String = when {
+        url.contains("dash+xml") || manifest.contains("<MPD") -> "application/dash+xml"
+        url.contains("mpegURL") || manifest.contains("#EXTM3U") -> "application/x-mpegURL"
+        else -> "audio/flac"
+    }
+
+    private fun TrackItem.toTrack() = Track(
+        id = id ?: "", title = title ?: "Unknown Track",
+        artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
+        artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
+        albumId = album?.id ?: "", albumTitle = album?.title ?: "Unknown Album",
+        coverUrl = albumCoverUrl(album?.cover),
+        durationMs = (duration ?: 0) * 1000L, trackNumber = trackNumber ?: 0
+    )
+
+    private fun AlbumItem.toAlbum() = Album(
+        id = id ?: "", title = title ?: "Unknown Album",
+        artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
+        artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
+        coverUrl = albumCoverUrl(cover),
+        year = releaseDate?.take(4)?.toIntOrNull() ?: 0,
+        trackCount = numberOfTracks ?: 0, durationMs = (duration ?: 0) * 1000L
+    )
+
+    private fun AlbumResponseData.toAlbum() = Album(
+        id = id ?: "", title = title ?: "Unknown Album",
+        artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
+        artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
+        coverUrl = albumCoverUrl(cover),
+        year = releaseDate?.take(4)?.toIntOrNull() ?: 0,
+        trackCount = numberOfTracks ?: 0, durationMs = (duration ?: 0) * 1000L
+    )
+
+    private fun ArtistItem.toArtist() = Artist(
+        id = id ?: "", name = name ?: "Unknown Artist",
+        imageUrl = artistPictureUrl(picture), albumCount = albumCount ?: 0
+    )
+
+    private fun ArtistResponseData.toArtist() = Artist(
+        id = id ?: "", name = name ?: "Unknown Artist",
+        imageUrl = artistPictureUrl(picture), albumCount = albumCount ?: 0
+    )
+
+    private fun extractTracks(items: List<*>?): List<Track> {
+        if (items == null) return emptyList()
+        val gson = Gson()
+        return items.mapNotNull { element ->
+            when (element) {
+                is JsonObject -> {
+                    val wrapped = element.get("item")
+                    val trackEl = wrapped ?: element
+                    gson.fromJson(trackEl, TrackItem::class.java)?.toTrack()
+                }
+                is Map<*, *> -> {
+                    val wrapped = element["item"]
+                    val trackMap = (wrapped as? Map<*, *>) ?: element
+                    gson.fromJson(gson.toJsonTree(trackMap), TrackItem::class.java)?.toTrack()
+                }
+                else -> null
+            }
         }
-    }
-
-    private fun TrackItem.toTrack(): Track {
-        return Track(
-            id = id ?: "",
-            title = title ?: "Unknown Track",
-            artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
-            artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
-            albumId = album?.id ?: "",
-            albumTitle = album?.title ?: "Unknown Album",
-            coverUrl = albumCoverUrl(album?.cover),
-            durationMs = (duration ?: 0) * 1000L,
-            trackNumber = trackNumber ?: 0
-        )
-    }
-
-    private fun AlbumItem.toAlbum(): Album {
-        return Album(
-            id = id ?: "", title = title ?: "Unknown Album",
-            artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
-            artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
-            coverUrl = albumCoverUrl(cover),
-            year = releaseDate?.take(4)?.toIntOrNull() ?: 0,
-            trackCount = numberOfTracks ?: 0, durationMs = (duration ?: 0) * 1000L
-        )
-    }
-
-    private fun TrackItem.toAlbum(): Album {
-        return Album(
-            id = id ?: "", title = title ?: "Unknown Album",
-            artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
-            artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
-            coverUrl = albumCoverUrl(album?.cover),
-            year = album?.releaseDate?.take(4)?.toIntOrNull() ?: 0,
-            trackCount = 0, durationMs = (duration ?: 0) * 1000L
-        )
-    }
-
-    private fun AlbumDetail.toAlbum(): Album {
-        return Album(
-            id = id ?: "", title = title ?: "Unknown Album",
-            artistName = artist?.name ?: "Unknown Artist",
-            artistId = artist?.id ?: "", coverUrl = albumCoverUrl(cover),
-            year = releaseDate?.take(4)?.toIntOrNull() ?: 0,
-            trackCount = numberOfTracks ?: 0, durationMs = (duration ?: 0) * 1000L
-        )
-    }
-
-    private fun ArtistItem.toArtist(): Artist {
-        return Artist(id = id ?: "", name = name ?: "Unknown Artist",
-            imageUrl = artistPictureUrl(picture), albumCount = albumCount ?: 0)
-    }
-
-    private fun ArtistDetail.toArtist(): Artist {
-        return Artist(id = id ?: "", name = name ?: "Unknown Artist",
-            imageUrl = artistPictureUrl(picture), albumCount = albumCount ?: 0)
     }
 
     private fun albumCoverUrl(cover: String?): String {

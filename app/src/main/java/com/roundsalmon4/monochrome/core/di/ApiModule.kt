@@ -9,23 +9,23 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
-import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
-import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
+import java.util.concurrent.TimeUnit
 
 @Module
 @InstallIn(SingletonComponent::class)
 object ApiModule {
 
-    private val API_INSTANCES = listOf(
-    "https://hifi.geeked.wtf/",
-    "https://eu-central.monochrome.tf/",
-    "https://us-west.monochrome.tf/",
-    "https://api.monochrome.tf/",
-    "https://monochrome-api.samidy.com/"
-)
-private const val DEFAULT_API_URL = "https://hifi.geeked.wtf/"
+    @Provides
+    @Singleton
+    @Named("api.instances")
+    fun provideApiInstances(): List<String> = listOf(
+        "https://api.monochrome.tf/",
+        "https://monochrome-api.samidy.com/",
+        "https://eu-central.monochrome.tf/",
+        "https://us-west.monochrome.tf/"
+    )
 
     @Provides
     @Singleton
@@ -44,26 +44,9 @@ private const val DEFAULT_API_URL = "https://hifi.geeked.wtf/"
         return OkHttpClient.Builder()
             .addInterceptor(userAgent)
             .addInterceptor(logging)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideRetrofit(client: OkHttpClient): Retrofit {
-        val gson = GsonBuilder().setLenient().create()
-        return Retrofit.Builder()
-            .baseUrl(DEFAULT_API_URL)
-            .client(client)
-            .addConverterFactory(GsonConverterFactory.create(gson))
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideTidalApiService(retrofit: Retrofit): TidalApiService {
-        return retrofit.create(TidalApiService::class.java)
     }
 }

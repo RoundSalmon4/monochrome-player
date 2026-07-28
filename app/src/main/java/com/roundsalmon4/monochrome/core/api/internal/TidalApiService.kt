@@ -7,51 +7,39 @@ import retrofit2.http.Query
 interface TidalApiService {
 
     @GET("search/")
-    suspend fun search(@Query("q") query: String): SearchResponse
+    suspend fun searchTracks(@Query("s") query: String): ApiResponse<SearchData>
 
     @GET("search/")
-    suspend fun searchTracks(@Query("s") query: String): SearchResponse
+    suspend fun searchArtists(@Query("a") query: String): ApiResponse<SearchData>
 
     @GET("search/")
-    suspend fun searchArtists(@Query("a") query: String): SearchResponse
-
-    @GET("search/")
-    suspend fun searchAlbums(@Query("al") query: String): SearchResponse
-
-    @GET("search/")
-    suspend fun searchPlaylists(@Query("p") query: String): SearchResponse
+    suspend fun searchAlbums(@Query("al") query: String): ApiResponse<SearchData>
 
     @GET("album/")
-    suspend fun getAlbum(@Query("id") albumId: String): AlbumResponse
+    suspend fun getAlbum(@Query("id") albumId: String): ApiResponse<AlbumResponseData>
 
     @GET("album/")
     suspend fun getAlbumTracks(
         @Query("id") albumId: String,
         @Query("offset") offset: Int,
         @Query("limit") limit: Int = 500
-    ): AlbumResponse
+    ): ApiResponse<AlbumResponseData>
 
     @GET("artist/")
-    suspend fun getArtist(@Query("id") artistId: String): ArtistResponse
+    suspend fun getArtist(@Query("id") artistId: String): ApiResponse<ArtistResponseData>
 
     @GET("artist/")
     suspend fun getArtistAlbums(
         @Query("f") artistId: String,
         @Query("skip_tracks") skipTracks: Boolean = true
-    ): ArtistResponse
+    ): ApiResponse<SearchData>
 
     @GET("track/")
-    suspend fun getTrack(@Query("id") trackId: String): TrackResponse
+    suspend fun getTrack(@Query("id") trackId: String): ApiResponse<TrackResponseData>
 
     @GET("playlist/")
-    suspend fun getPlaylist(@Query("id") playlistId: String): PlaylistResponse
-
-    @GET("playlist/")
-    suspend fun getPlaylistTracks(
-        @Query("id") playlistId: String,
-        @Query("offset") offset: Int
-    ): PlaylistResponse
+    suspend fun getPlaylist(@Query("id") playlistId: String): ApiResponse<SearchData>
 
     @GET("mix/")
-    suspend fun getMix(@Query("id") mixId: String): MixResponse
+    suspend fun getMix(@Query("id") mixId: String): ApiResponse<SearchData>
 }
