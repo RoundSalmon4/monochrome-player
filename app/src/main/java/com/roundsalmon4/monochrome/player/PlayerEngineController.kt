@@ -7,18 +7,18 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class PlayerEngineController(context: Context) {
@@ -44,15 +44,25 @@ class PlayerEngineController(context: Context) {
     private val _playbackState = MutableStateFlow(PlayerPlaybackSnapshot())
     val playbackState: StateFlow<PlayerPlaybackSnapshot> = _playbackState.asStateFlow()
 
+    private val _trackEnded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val trackEnded: SharedFlow<Unit> = _trackEnded.asSharedFlow()
+
+    private var prevPlaybackState = Player.STATE_IDLE
+
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) { updateSnapshot() }
-        override fun onPlaybackStateChanged(playbackState: Int) { updateSnapshot() }
+        override fun onPlaybackStateChanged(state: Int) {
+            if (prevPlaybackState != Player.STATE_ENDED && state == Player.STATE_ENDED) {
+                _trackEnded.tryEmit(Unit)
+            }
+            prevPlaybackState = state
+            updateSnapshot()
+        }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { updateSnapshot() }
     }
 
     init {
         exoPlayer.addListener(playerListener)
-        startSnapshotPolling()
     }
 
     fun play(url: String, mimeType: String? = null) {
@@ -62,10 +72,6 @@ class PlayerEngineController(context: Context) {
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
     }
-
-    fun playDash(manifestUrl: String) = play(manifestUrl, "application/dash+xml")
-
-    fun playHls(manifestUrl: String) = play(manifestUrl, "application/x-mpegURL")
 
     fun togglePlayPause() {
         if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
@@ -99,15 +105,6 @@ class PlayerEngineController(context: Context) {
         exoPlayer.release()
     }
 
-    private fun startSnapshotPolling() {
-        scope.launch {
-            while (isActive) {
-                updateSnapshot()
-                delay(250)
-            }
-        }
-    }
-
     private fun updateSnapshot() {
         _playbackState.update {
             PlayerPlaybackSnapshot(
@@ -117,7 +114,8 @@ class PlayerEngineController(context: Context) {
                 bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0),
                 playbackSpeed = exoPlayer.playbackParameters.speed,
                 isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING,
-                isLive = exoPlayer.isCurrentMediaItemLive
+                isLive = exoPlayer.isCurrentMediaItemLive,
+                playbackState = exoPlayer.playbackState
             )
         }
     }

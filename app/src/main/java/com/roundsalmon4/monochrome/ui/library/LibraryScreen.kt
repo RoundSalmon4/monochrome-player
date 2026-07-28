@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -34,10 +36,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import com.roundsalmon4.monochrome.core.api.model.Track
 import com.roundsalmon4.monochrome.core.database.entity.ListenHistoryEntry
 import com.roundsalmon4.monochrome.core.database.entity.LocalPlaylist
 import com.roundsalmon4.monochrome.core.database.entity.LocalSubscription
@@ -46,7 +52,7 @@ import com.roundsalmon4.monochrome.ui.components.AddToPlaylistDialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryScreen(
-    onTrackClick: (String) -> Unit,
+    onTrackClick: (List<Track>, Int) -> Unit,
     onPlaylistClick: (Long) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
@@ -60,35 +66,26 @@ fun LibraryScreen(
             title = { Text("Create Playlist") },
             text = {
                 OutlinedTextField(
-                    value = playlistNameInput,
-                    onValueChange = { playlistNameInput = it },
-                    label = { Text("Playlist name") },
-                    singleLine = true
-                )
+                    value = playlistNameInput, onValueChange = { playlistNameInput = it },
+                    label = { Text("Playlist name") }, singleLine = true)
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (playlistNameInput.isNotBlank()) {
-                            viewModel.createPlaylist(playlistNameInput.trim())
-                            playlistNameInput = ""
-                        }
+                TextButton(onClick = {
+                    if (playlistNameInput.isNotBlank()) {
+                        viewModel.createPlaylist(playlistNameInput.trim())
+                        playlistNameInput = ""
                     }
-                ) { Text("Create") }
+                }) { Text("Create") }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    playlistNameInput = ""
-                    viewModel.dismissCreatePlaylistDialog()
-                }) { Text("Cancel") }
+                TextButton(onClick = { playlistNameInput = ""; viewModel.dismissCreatePlaylistDialog() }) { Text("Cancel") }
             }
         )
     }
 
     addToPlaylistEntry?.let { entry ->
         AddToPlaylistDialog(
-            trackTitle = entry.title,
-            playlists = uiState.playlists,
+            trackTitle = entry.title, playlists = uiState.playlists,
             onDismiss = { viewModel.dismissAddToPlaylistDialog() },
             onAddToPlaylist = { viewModel.addToPlaylist(entry, it) },
             onCreatePlaylist = { viewModel.createPlaylistAndAdd(entry, it) }
@@ -110,15 +107,7 @@ fun LibraryScreen(
                     Tab(
                         selected = uiState.activeTab == tab,
                         onClick = { viewModel.switchTab(tab) },
-                        text = {
-                            Text(
-                                when (tab) {
-                                    LibraryTab.HISTORY -> "History"
-                                    LibraryTab.PLAYLISTS -> "Playlists"
-                                    LibraryTab.ARTISTS -> "Artists"
-                                }
-                            )
-                        }
+                        text = { Text(when (tab) { LibraryTab.HISTORY -> "History"; LibraryTab.PLAYLISTS -> "Playlists"; LibraryTab.ARTISTS -> "Artists" }) }
                     )
                 }
             }
@@ -137,7 +126,8 @@ fun LibraryScreen(
                     onDeletePlaylist = { viewModel.deletePlaylist(it) }
                 )
                 LibraryTab.ARTISTS -> ArtistsTab(
-                    subscriptions = uiState.subscriptions
+                    subscriptions = uiState.subscriptions,
+                    onArtistClick = { }
                 )
             }
         }
@@ -147,7 +137,7 @@ fun LibraryScreen(
 @Composable
 private fun HistoryTab(
     history: List<ListenHistoryEntry>,
-    onTrackClick: (String) -> Unit,
+    onTrackClick: (List<Track>, Int) -> Unit,
     onDeleteEntry: (String) -> Unit,
     onAddToPlaylist: (ListenHistoryEntry) -> Unit,
     onClearAll: () -> Unit
@@ -158,13 +148,10 @@ private fun HistoryTab(
         }
         return
     }
-
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
+            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = onClearAll) { Text("Clear all") }
             }
         }
@@ -172,7 +159,14 @@ private fun HistoryTab(
             ListItem(
                 headlineContent = { Text(entry.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 supportingContent = { Text(entry.artistName) },
-                modifier = Modifier.clickable { onTrackClick(entry.trackId) }
+                modifier = Modifier.clickable {
+                    val track = Track(
+                        id = entry.trackId, title = entry.title, artistName = entry.artistName,
+                        artistId = entry.artistId, albumId = "", albumTitle = entry.albumTitle,
+                        coverUrl = entry.coverUrl, durationMs = entry.durationMs
+                    )
+                    onTrackClick(listOf(track), 0)
+                }
             )
         }
     }
@@ -190,7 +184,6 @@ private fun PlaylistsTab(
         }
         return
     }
-
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
         items(playlists, key = { it.id }) { playlist ->
             ListItem(
@@ -208,10 +201,26 @@ private fun PlaylistsTab(
 }
 
 @Composable
-private fun ArtistsTab(subscriptions: List<LocalSubscription>) {
+private fun ArtistsTab(
+    subscriptions: List<LocalSubscription>,
+    onArtistClick: (String) -> Unit
+) {
     if (subscriptions.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No subscribed artists", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
+        items(subscriptions, key = { it.artistId }) { sub ->
+            ListItem(
+                headlineContent = { Text(sub.artistName, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingContent = {
+                    AsyncImage(model = sub.thumbnailUrl, contentDescription = null,
+                        modifier = Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop)
+                },
+                modifier = Modifier.clickable { onArtistClick(sub.artistId) }
+            )
         }
     }
 }

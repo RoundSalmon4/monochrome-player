@@ -1,5 +1,7 @@
 package com.roundsalmon4.monochrome.player
 
+import androidx.media3.common.Player
+
 data class PlayerPlaybackSnapshot(
     val isPlaying: Boolean = false,
     val currentPosition: Long = 0L,
@@ -8,6 +10,7 @@ data class PlayerPlaybackSnapshot(
     val playbackSpeed: Float = 1.0f,
     val isBuffering: Boolean = false,
     val isLive: Boolean = false,
+    val playbackState: Int = Player.STATE_IDLE,
     val currentQualityLabel: String = "",
     val selectedAudioTrackIndex: Int = -1
 )

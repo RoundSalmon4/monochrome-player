@@ -69,12 +69,22 @@ fun AppNavigation(
         it.route == Route.Player::class.qualifiedName
     } == true
 
+    val playbackState by playerController.playbackState.collectAsState()
     val miniPlayerState by playerStateManager.miniPlayerState.collectAsState()
+    val combinedMini = miniPlayerState.copy(
+        isPlaying = playbackState.isPlaying,
+        currentPosition = playbackState.currentPosition,
+        duration = playbackState.duration,
+        bufferedPosition = playbackState.bufferedPosition
+    )
     val prefs by playerPreferences.uiState.collectAsState(initial = PreferencesUiState())
 
     val playTracks: (List<Track>, Int) -> Unit = { tracks, index ->
         playerStateManager.setQueue(tracks, index)
-        navController.navigate(Route.Player)
+        navController.navigate(Route.Player) {
+            popUpTo(Route.Home) { saveState = true }
+            launchSingleTop = true
+        }
     }
 
     Scaffold(
@@ -90,9 +100,7 @@ fun AppNavigation(
                             } == true,
                             onClick = {
                                 navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
+                                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
                                     restoreState = true
                                 }
@@ -105,17 +113,9 @@ fun AppNavigation(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
             MiniPlayer(
-                state = miniPlayerState,
+                state = combinedMini,
                 isVisible = showBottomBar && !isOnPlayerScreen && prefs.showMiniPlayer,
-                onPlayPause = {
-                    playerController.togglePlayPause()
-                    playerStateManager.updatePlaybackState(
-                        isPlaying = !miniPlayerState.isPlaying,
-                        currentPosition = playerController.exoPlayer.currentPosition,
-                        duration = playerController.exoPlayer.duration,
-                        bufferedPosition = playerController.exoPlayer.bufferedPosition
-                    )
-                },
+                onPlayPause = { playerController.togglePlayPause() },
                 onRewind = { playerController.seekBackward() },
                 onForward = { playerController.seekForward() },
                 onClose = {
@@ -125,7 +125,9 @@ fun AppNavigation(
                 },
                 onTap = {
                     if (miniPlayerState.trackId.isNotEmpty()) {
-                        navController.navigate(Route.Player)
+                        navController.navigate(Route.Player) {
+                            launchSingleTop = true
+                        }
                     }
                 }
             )
@@ -136,29 +138,20 @@ fun AppNavigation(
             ) {
                 composable<Route.Home> {
                     HomeScreen(
-                        onAlbumClick = { albumId ->
-                            navController.navigate(Route.Album(albumId))
-                        },
-                        onArtistClick = { artistId ->
-                            navController.navigate(Route.Artist(artistId))
-                        }
+                        onAlbumClick = { navController.navigate(Route.Album(it)) },
+                        onArtistClick = { navController.navigate(Route.Artist(it)) }
                     )
                 }
 
                 composable<Route.Player> {
-                    PlayerScreen(
-                        onBackClick = { navController.popBackStack() }
-                    )
+                    PlayerScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 composable<Route.Search> {
                     SearchScreen(
-                        onAlbumClick = { albumId ->
-                            navController.navigate(Route.Album(albumId))
-                        },
-                        onArtistClick = { artistId ->
-                            navController.navigate(Route.Artist(artistId))
-                        }
+                        onAlbumClick = { navController.navigate(Route.Album(it)) },
+                        onArtistClick = { navController.navigate(Route.Artist(it)) },
+                        onTrackClick = playTracks
                     )
                 }
 
@@ -176,20 +169,14 @@ fun AppNavigation(
                     ArtistDetailScreen(
                         artistId = route.artistId,
                         onBackClick = { navController.popBackStack() },
-                        onAlbumClick = { albumId ->
-                            navController.navigate(Route.Album(albumId))
-                        }
+                        onAlbumClick = { navController.navigate(Route.Album(it)) }
                     )
                 }
 
                 composable<Route.Library> {
                     LibraryScreen(
-                        onTrackClick = {
-                            navController.navigate(Route.Player)
-                        },
-                        onPlaylistClick = { playlistId ->
-                            navController.navigate(Route.PlaylistDetail(playlistId))
-                        }
+                        onTrackClick = { tracks, index -> playTracks(tracks, index) },
+                        onPlaylistClick = { navController.navigate(Route.PlaylistDetail(it)) }
                     )
                 }
 
@@ -199,7 +186,10 @@ fun AppNavigation(
                         playlistId = route.playlistId,
                         onTrackClick = { tracks, index ->
                             playerStateManager.setQueue(tracks, index)
-                            navController.navigate(Route.Player)
+                            navController.navigate(Route.Player) {
+                                popUpTo(Route.Home) { saveState = true }
+                                launchSingleTop = true
+                            }
                         },
                         onBackClick = { navController.popBackStack() }
                     )

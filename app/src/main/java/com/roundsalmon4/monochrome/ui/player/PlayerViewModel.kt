@@ -1,17 +1,21 @@
 package com.roundsalmon4.monochrome.ui.player
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.TidalApi
 import com.roundsalmon4.monochrome.core.api.model.Track
 import com.roundsalmon4.monochrome.player.PlayerEngineController
 import com.roundsalmon4.monochrome.player.PlayerStateManager
+import com.roundsalmon4.monochrome.player.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import androidx.media3.common.Player
 
 data class PlayerUiState(
     val currentTrack: Track? = null,
@@ -19,11 +23,16 @@ data class PlayerUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val queueSize: Int = 0,
-    val currentIndex: Int = -1
+    val currentIndex: Int = -1,
+    val currentPosition: Long = 0L,
+    val duration: Long = 0L,
+    val bufferedPosition: Long = 0L,
+    val playbackSpeed: Float = 1.0f
 )
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val tidalApi: TidalApi,
     private val playerController: PlayerEngineController,
     private val playerStateManager: PlayerStateManager
@@ -35,12 +44,26 @@ class PlayerViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             playerStateManager.queue.collect { queue ->
-                val track = queue.currentTrack
                 _uiState.value = _uiState.value.copy(
-                    currentTrack = track,
+                    currentTrack = queue.currentTrack,
                     queueSize = queue.tracks.size,
                     currentIndex = queue.currentIndex
                 )
+            }
+        }
+        viewModelScope.launch {
+            playerController.playbackState.collect { snap ->
+                _uiState.value = _uiState.value.copy(
+                    isPlaying = snap.isPlaying,
+                    currentPosition = snap.currentPosition,
+                    duration = snap.duration,
+                    bufferedPosition = snap.bufferedPosition,
+                    playbackSpeed = snap.playbackSpeed
+                )
+                playerStateManager.updatePlaybackState(snap.isPlaying, snap.currentPosition, snap.duration, snap.bufferedPosition)
+                if (snap.playbackState == Player.STATE_ENDED) {
+                    nextTrack()
+                }
             }
         }
     }
@@ -61,12 +84,8 @@ class PlayerViewModel @Inject constructor(
             try {
                 val streamUrl = tidalApi.getTrackStreamUrl(track.id)
                 playerController.play(streamUrl.url, streamUrl.mimeType)
+                PlaybackService.start(playerController, context)
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)
-                playerStateManager.updatePlaybackState(
-                    isPlaying = true,
-                    currentPosition = 0,
-                    duration = track.durationMs
-                )
                 _uiState.value = _uiState.value.copy(isPlaying = true, isLoading = false)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Playback failed")
@@ -81,6 +100,12 @@ class PlayerViewModel @Inject constructor(
     fun seekBackward() = playerController.seekBackward()
 
     fun seekForward() = playerController.seekForward()
+
+    fun seekTo(positionMs: Long) = playerController.seekTo(positionMs)
+
+    fun setPlaybackSpeed(speed: Float) {
+        playerController.setPlaybackSpeed(speed)
+    }
 
     fun nextTrack() {
         playerStateManager.nextTrack()

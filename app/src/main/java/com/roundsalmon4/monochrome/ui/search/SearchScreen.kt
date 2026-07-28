@@ -1,30 +1,22 @@
 package com.roundsalmon4.monochrome.ui.search
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -48,6 +40,7 @@ import com.roundsalmon4.monochrome.core.api.model.Track
 fun SearchScreen(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
+    onTrackClick: (List<Track>, Int) -> Unit,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,51 +75,42 @@ fun SearchScreen(
             else -> {
                 LazyColumn {
                     if (state.artists.isNotEmpty()) {
-                        item {
-                            Text("Artists", style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                        }
+                        item { Text("Artists", style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                         items(state.artists, key = { it.id }) { artist ->
                             ListItem(
                                 headlineContent = { Text(artist.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 leadingContent = {
-                                    AsyncImage(
-                                        model = artist.imageUrl, contentDescription = null,
-                                        modifier = Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop
-                                    )
+                                    AsyncImage(model = artist.imageUrl, contentDescription = null,
+                                        modifier = Modifier.size(40.dp).clip(CircleShape), contentScale = ContentScale.Crop)
                                 },
                                 modifier = Modifier.clickable { onArtistClick(artist.id) }
                             )
                         }
                     }
                     if (state.albums.isNotEmpty()) {
-                        item {
-                            Text("Albums", style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                        }
+                        item { Text("Albums", style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                         items(state.albums, key = { it.id }) { album ->
                             ListItem(
                                 headlineContent = { Text(album.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                 supportingContent = { Text(album.artistName) },
                                 leadingContent = {
-                                    AsyncImage(
-                                        model = album.coverUrl, contentDescription = null,
-                                        modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop
-                                    )
+                                    AsyncImage(model = album.coverUrl, contentDescription = null,
+                                        modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)
                                 },
                                 modifier = Modifier.clickable { onAlbumClick(album.id) }
                             )
                         }
                     }
                     if (state.tracks.isNotEmpty()) {
-                        item {
-                            Text("Tracks", style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-                        }
+                        item { Text("Tracks", style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
                         items(state.tracks, key = { it.id }) { track ->
                             ListItem(
                                 headlineContent = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                supportingContent = { Text(track.artistName) }
+                                supportingContent = { Text(track.artistName) },
+                                modifier = Modifier.clickable { onTrackClick(state.tracks, state.tracks.indexOf(track)) }
                             )
                         }
                     }
