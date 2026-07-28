@@ -40,7 +40,7 @@ data class ArtistResponseData(
     val picture: String? = null,
     val type: String? = null,
     val albumCount: Int? = null,
-    val items: List<AlbumTrackItem>? = null
+    val items: List<Map<String, Any?>>? = null
 )
 
 data class TrackResponseData(

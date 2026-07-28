@@ -6,6 +6,7 @@ import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
+import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistResponseData
 import com.roundsalmon4.monochrome.core.api.internal.dto.TrackItem
 import com.roundsalmon4.monochrome.core.api.model.Album
