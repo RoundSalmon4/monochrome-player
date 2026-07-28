@@ -18,7 +18,14 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object ApiModule {
 
-    private const val DEFAULT_API_URL = "https://monochrome.tf/"
+    private val API_INSTANCES = listOf(
+    "https://hifi.geeked.wtf/",
+    "https://eu-central.monochrome.tf/",
+    "https://us-west.monochrome.tf/",
+    "https://api.monochrome.tf/",
+    "https://monochrome-api.samidy.com/"
+)
+private const val DEFAULT_API_URL = "https://hifi.geeked.wtf/"
 
     @Provides
     @Singleton
