@@ -11,7 +11,6 @@ import com.roundsalmon4.monochrome.core.database.entity.LocalPlaylist
 import com.roundsalmon4.monochrome.core.database.entity.LocalSubscription
 import com.roundsalmon4.monochrome.core.database.entity.PlaylistTrack
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
