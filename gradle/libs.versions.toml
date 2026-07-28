@@ -32,7 +32,7 @@ hilt = "2.58"
 hilt-navigation-compose = "1.2.0"
 
 # OkHttp
-okhttp = "3.12.13"
+okhttp = "4.12.0"
 okhttp-brotli = "4.12.0"
 
 # Gson
@@ -74,7 +74,7 @@ florianingerl-regex = "1.1.11"
 jsonpath = "2.4.0"
 
 # Retrofit
-retrofit = "2.5.0"
+retrofit = "2.11.0"
 
 # Serialization
 serialization = "1.11.0"

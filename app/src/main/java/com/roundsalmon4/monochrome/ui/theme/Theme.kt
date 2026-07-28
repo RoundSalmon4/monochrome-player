@@ -60,9 +60,9 @@ fun MonochromeTheme(
             secondary = secondary,
             tertiary = secondary.lighten(),
             onPrimary = Color.White,
-            onBackground = LightBackground,
-            onSurface = LightBackground,
-            onSurfaceVariant = LightBackground
+            onBackground = Color.White,
+            onSurface = Color.White,
+            onSurfaceVariant = Color.White
         )
         else -> lightColorScheme(
             background = LightBackground,
