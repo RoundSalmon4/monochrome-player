@@ -1,9 +1,9 @@
 package com.roundsalmon4.monochrome.core.api.model
 
 data class SearchResults(
-    val albums: List<Album> = emptyList(),
+    val tracks: List<Track> = emptyList(),
     val artists: List<Artist> = emptyList(),
-    val tracks: List<Track> = emptyList()
+    val albums: List<Album> = emptyList()
 )
 
 data class Album(
@@ -34,4 +34,9 @@ data class Track(
     val coverUrl: String,
     val durationMs: Long = 0L,
     val trackNumber: Int = 0
+)
+
+data class StreamUrl(
+    val url: String,
+    val mimeType: String
 )
