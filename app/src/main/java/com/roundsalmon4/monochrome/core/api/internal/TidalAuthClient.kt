@@ -43,7 +43,6 @@ class TidalAuthClient @Inject constructor() {
             .add("grant_type", "client_credentials")
             .add("client_id", clientId)
             .add("client_secret", clientSecret)
-            .add("scope", "r_usr+w_usr+w_sub")
             .build()
 
         val request = okhttp3.Request.Builder()

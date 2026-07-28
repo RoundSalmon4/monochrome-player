@@ -156,34 +156,56 @@ class TidalApi @Inject constructor(
 
     private suspend fun getQobuzStreamUrl(isrc: String): String? {
         val baseUrl = "https://qobuz.kennyy.com.br"
+        android.util.Log.d("ChromePlayer", "Qobuz: searching ISRC=$isrc at $baseUrl")
         val searchUrl = "$baseUrl/api/get-music?q=${java.net.URLEncoder.encode(isrc, "UTF-8")}&offset=0"
         val searchResp = withContext(Dispatchers.IO) {
             okHttpClient.newCall(okhttp3.Request.Builder().url(searchUrl).build()).execute()
         }
-        if (!searchResp.isSuccessful) return null
-        val searchData = qobuzGson.fromJson(searchResp.body?.string(), Map::class.java) ?: return null
+        android.util.Log.d("ChromePlayer", "Qobuz search: HTTP ${searchResp.code}")
+        if (!searchResp.isSuccessful) {
+            android.util.Log.w("ChromePlayer", "Qobuz search failed: ${searchResp.body?.string()}")
+            return null
+        }
+        val searchBody = searchResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty body") }
+        val searchData = qobuzGson.fromJson(searchBody, Map::class.java)
+        android.util.Log.d("ChromePlayer", "Qobuz search response: ${searchBody.take(200)}")
 
         val items = (searchData["data"] as? Map<*, *>)
             ?.let { it["tracks"] as? Map<*, *> }
-            ?.let { it["items"] as? List<*> } ?: return null
+            ?.let { it["items"] as? List<*> }
+        if (items == null) { android.util.Log.w("ChromePlayer", "Qobuz: no items in response"); return null }
 
         val match = items.firstNotNullOfOrNull { item ->
             val m = item as? Map<*, *> ?: return@firstNotNullOfOrNull null
             if (m["isrc"]?.toString()?.lowercase() == isrc.lowercase()) m else null
-        } ?: return null
+        }
+        if (match == null) {
+            android.util.Log.w("ChromePlayer", "Qobuz: no ISRC match for $isrc in ${items.size} items")
+            return null
+        }
 
-        val qobuzTrackId = match["id"]?.toString() ?: return null
+        val qobuzTrackId = match["id"]?.toString()
+        if (qobuzTrackId == null) { android.util.Log.w("ChromePlayer", "Qobuz: no track id in match"); return null }
+        android.util.Log.d("ChromePlayer", "Qobuz: found track $qobuzTrackId")
         val quality = "27" // HI_RES_LOSSLESS
         val streamResp = withContext(Dispatchers.IO) {
             okHttpClient.newCall(
                 okhttp3.Request.Builder().url("$baseUrl/api/download-music?track_id=$qobuzTrackId&quality=$quality").build()
             ).execute()
         }
-        if (!streamResp.isSuccessful) return null
-        val streamData = qobuzGson.fromJson(streamResp.body?.string(), Map::class.java) ?: return null
-        if (streamData["success"] == true) {
-            return (streamData["data"] as? Map<*, *>)?.get("url")?.toString()
+        android.util.Log.d("ChromePlayer", "Qobuz download: HTTP ${streamResp.code}")
+        if (!streamResp.isSuccessful) {
+            android.util.Log.w("ChromePlayer", "Qobuz download failed: ${streamResp.body?.string()}")
+            return null
         }
+        val streamBody = streamResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty download body") }
+        val streamData = qobuzGson.fromJson(streamBody, Map::class.java)
+        if (streamData["success"] == true) {
+            val url = (streamData["data"] as? Map<*, *>)?.get("url")?.toString()
+            android.util.Log.d("ChromePlayer", if (url != null) "Qobuz: got stream URL" else "Qobuz: no URL in response")
+            return url
+        }
+        android.util.Log.w("ChromePlayer", "Qobuz: success=false in download response")
         return null
     }
 
