@@ -17,7 +17,9 @@ data class PlayerUiState(
     val currentTrack: Track? = null,
     val isPlaying: Boolean = false,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val queueSize: Int = 0,
+    val currentIndex: Int = -1
 )
 
 @HiltViewModel
@@ -30,23 +32,44 @@ class PlayerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    fun playTrack(track: Track) {
+    init {
+        viewModelScope.launch {
+            playerStateManager.queue.collect { queue ->
+                val track = queue.currentTrack
+                _uiState.value = _uiState.value.copy(
+                    currentTrack = track,
+                    queueSize = queue.tracks.size,
+                    currentIndex = queue.currentIndex
+                )
+            }
+        }
+    }
+
+    fun playCurrent() {
+        val track = playerStateManager.queue.value.currentTrack ?: return
+        playTrack(track)
+    }
+
+    fun playTrackAt(index: Int) {
+        playerStateManager.setCurrentIndex(index)
+        playCurrent()
+    }
+
+    private fun playTrack(track: Track) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
                 val streamUrl = tidalApi.getTrackStreamUrl(track.id)
                 playerController.play(streamUrl.url, streamUrl.mimeType)
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)
-                _uiState.value = _uiState.value.copy(
-                    currentTrack = track,
+                playerStateManager.updatePlaybackState(
                     isPlaying = true,
-                    isLoading = false
+                    currentPosition = 0,
+                    duration = track.durationMs
                 )
+                _uiState.value = _uiState.value.copy(isPlaying = true, isLoading = false)
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message ?: "Playback failed"
-                )
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Playback failed")
             }
         }
     }
@@ -58,4 +81,14 @@ class PlayerViewModel @Inject constructor(
     fun seekBackward() = playerController.seekBackward()
 
     fun seekForward() = playerController.seekForward()
+
+    fun nextTrack() {
+        playerStateManager.nextTrack()
+        playCurrent()
+    }
+
+    fun previousTrack() {
+        playerStateManager.previousTrack()
+        playCurrent()
+    }
 }

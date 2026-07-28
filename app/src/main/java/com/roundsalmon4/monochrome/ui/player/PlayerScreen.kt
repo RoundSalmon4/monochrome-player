@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Forward30
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +42,8 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    viewModel.playCurrent()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -75,37 +79,30 @@ fun PlayerScreen(
                         contentScale = ContentScale.Crop
                     )
 
-                    Text(
-                        text = track.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 24.dp)
-                    )
+                    Text(track.title, style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 24.dp))
 
-                    Text(
-                        text = track.artistName,
-                        style = MaterialTheme.typography.bodyLarge,
+                    Text(track.artistName, style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
 
-                    Text(
-                        text = track.albumTitle,
-                        style = MaterialTheme.typography.bodyMedium,
+                    Text(track.albumTitle, style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                        maxLines = 1, overflow = TextOverflow.Ellipsis)
 
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(top = 48.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(onClick = { viewModel.previousTrack() }) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous",
+                                modifier = Modifier.size(36.dp))
+                        }
                         IconButton(onClick = { viewModel.seekBackward() }) {
-                            Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s", modifier = Modifier.size(48.dp))
+                            Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s",
+                                modifier = Modifier.size(48.dp))
                         }
                         IconButton(onClick = { viewModel.togglePlayPause() }) {
                             Icon(
@@ -115,7 +112,12 @@ fun PlayerScreen(
                             )
                         }
                         IconButton(onClick = { viewModel.seekForward() }) {
-                            Icon(Icons.Default.Forward30, contentDescription = "Forward 30s", modifier = Modifier.size(48.dp))
+                            Icon(Icons.Default.Forward30, contentDescription = "Forward 30s",
+                                modifier = Modifier.size(48.dp))
+                        }
+                        IconButton(onClick = { viewModel.nextTrack() }) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next",
+                                modifier = Modifier.size(36.dp))
                         }
                     }
                 }

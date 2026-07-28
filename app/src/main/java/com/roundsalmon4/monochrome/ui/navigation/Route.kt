@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface Route {
     @Serializable data object Home : Route
-    @Serializable data class Player(val trackIndex: Int, val queueId: String = "") : Route
+    @Serializable data object Player : Route
     @Serializable data object Search : Route
     @Serializable data class Album(val albumId: String) : Route
     @Serializable data class Artist(val artistId: String) : Route

@@ -1,8 +1,6 @@
 package com.roundsalmon4.monochrome.ui.navigation
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -10,7 +8,6 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -18,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -29,11 +25,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.roundsalmon4.monochrome.core.api.model.Track
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import com.roundsalmon4.monochrome.core.datastore.PreferencesUiState
 import com.roundsalmon4.monochrome.player.PlayerEngineController
 import com.roundsalmon4.monochrome.player.PlayerStateManager
 import com.roundsalmon4.monochrome.player.service.PlaybackService
+import com.roundsalmon4.monochrome.ui.album.AlbumDetailScreen
+import com.roundsalmon4.monochrome.ui.artist.ArtistDetailScreen
 import com.roundsalmon4.monochrome.ui.components.MiniPlayer
 import com.roundsalmon4.monochrome.ui.home.HomeScreen
 import com.roundsalmon4.monochrome.ui.library.LibraryScreen
@@ -72,6 +71,11 @@ fun AppNavigation(
 
     val miniPlayerState by playerStateManager.miniPlayerState.collectAsState()
     val prefs by playerPreferences.uiState.collectAsState(initial = PreferencesUiState())
+
+    val playTracks: (List<Track>, Int) -> Unit = { tracks, index ->
+        playerStateManager.setQueue(tracks, index)
+        navController.navigate(Route.Player)
+    }
 
     Scaffold(
         bottomBar = {
@@ -121,7 +125,7 @@ fun AppNavigation(
                 },
                 onTap = {
                     if (miniPlayerState.trackId.isNotEmpty()) {
-                        navController.navigate(Route.Player(0))
+                        navController.navigate(Route.Player)
                     }
                 }
             )
@@ -160,18 +164,28 @@ fun AppNavigation(
 
                 composable<Route.Album> { backStackEntry ->
                     val route = backStackEntry.toRoute<Route.Album>()
-                    AlbumDetailScreen(route.albumId)
+                    AlbumDetailScreen(
+                        albumId = route.albumId,
+                        onBackClick = { navController.popBackStack() },
+                        onTrackClick = playTracks
+                    )
                 }
 
                 composable<Route.Artist> { backStackEntry ->
                     val route = backStackEntry.toRoute<Route.Artist>()
-                    ArtistDetailScreen(route.artistId)
+                    ArtistDetailScreen(
+                        artistId = route.artistId,
+                        onBackClick = { navController.popBackStack() },
+                        onAlbumClick = { albumId ->
+                            navController.navigate(Route.Album(albumId))
+                        }
+                    )
                 }
 
                 composable<Route.Library> {
                     LibraryScreen(
                         onTrackClick = {
-                            navController.navigate(Route.Player(0))
+                            navController.navigate(Route.Player)
                         },
                         onPlaylistClick = { playlistId ->
                             navController.navigate(Route.PlaylistDetail(playlistId))
@@ -184,7 +198,7 @@ fun AppNavigation(
                     PlaylistDetailScreen(
                         playlistId = route.playlistId,
                         onTrackClick = {
-                            navController.navigate(Route.Player(0))
+                            navController.navigate(Route.Player)
                         },
                         onBackClick = { navController.popBackStack() }
                     )
@@ -195,19 +209,5 @@ fun AppNavigation(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun AlbumDetailScreen(albumId: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Album: $albumId", style = MaterialTheme.typography.titleLarge)
-    }
-}
-
-@Composable
-private fun ArtistDetailScreen(artistId: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Artist: $artistId", style = MaterialTheme.typography.titleLarge)
     }
 }
