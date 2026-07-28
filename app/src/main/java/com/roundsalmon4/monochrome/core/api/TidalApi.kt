@@ -104,11 +104,11 @@ class TidalApi @Inject constructor(
         val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
         val token = authClient.getToken()
 
-        val url = "https://api.tidal.com/v1/tracks/$trackNum/playbackinfo"
+        val apiUrl = "https://api.tidal.com/v1/tracks/$trackNum/playbackinfo"
         val params = "audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US"
 
         val request = okhttp3.Request.Builder()
-            .url("$url?$params")
+            .url("$apiUrl?$params")
             .header("Authorization", "Bearer $token")
             .build()
 
