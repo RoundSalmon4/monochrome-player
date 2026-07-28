@@ -3,7 +3,6 @@ package com.roundsalmon4.monochrome.core.api
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
-import com.roundsalmon4.monochrome.core.api.internal.TidalAuthClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
@@ -27,7 +26,6 @@ import javax.inject.Singleton
 @Singleton
 class TidalApi @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val authClient: TidalAuthClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -107,41 +105,24 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(trackId: String, isrc: String = ""): StreamUrl {
-        // Qobuz: direct FLAC, no DRM. Primary source.
+        // 1. Qobuz: direct FLAC, no DRM
         if (isrc.isNotBlank()) {
             try {
                 val url = getQobuzStreamUrl(isrc)
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
-            // Deezer: backup when Qobuz fails
+            // 2. Deezer: backup
             try {
                 val url = getDeezerStreamUrl(isrc)
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
         }
-        // Last resort: TIDAL proxy (30s preview only, but better than silence)
-        android.util.Log.w("ChromePlayer", "All external providers failed, falling back to TIDAL preview for $trackId")
-        return getTidalPreviewStreamUrl(trackId)
-    }
-
-    private suspend fun getTidalPreviewStreamUrl(trackId: String): StreamUrl {
-        val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
-        val token = authClient.getToken()
-        val req = okhttp3.Request.Builder()
-            .url("https://tidal-proxy.monochrome.tf/api/v1/tracks/$trackNum/playbackinfo?audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US")
-            .header("Authorization", "Bearer $token").build()
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-        if (!resp.isSuccessful) throw RuntimeException("TIDAL proxy returned ${resp.code}")
-        val json = resp.body?.string() ?: throw RuntimeException("Empty response")
-        val data = Gson().fromJson(json, Map::class.java)
-        val manifestStr = data["manifest"]?.toString() ?: throw RuntimeException("No manifest")
-        val decoded = try { String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT)) } catch (_: Exception) { manifestStr }
-        if (decoded.contains("<MPD")) {
-            val url = Regex("""initialization="([^"]+)"""").find(decoded)?.groupValues?.getOrNull(1)
-                ?: throw RuntimeException("No URL in manifest")
-            return StreamUrl(url = url.replace("&amp;", "&"), mimeType = "audio/mp4")
-        }
-        throw RuntimeException("Unrecognized manifest format")
+        // 3. Amazon Music: last resort
+        try {
+            val url = getAmazonStreamUrl(trackId)
+            if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
+        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
+        throw RuntimeException("All audio sources failed for track $trackId")
     }
 
     private val streamGson = Gson()
@@ -285,6 +266,25 @@ class TidalApi @Inject constructor(
             android.util.Log.w("ChromePlayer", "Deezer: returned ${resp.code}")
         } catch (e: Exception) {
             android.util.Log.w("ChromePlayer", "Deezer: request failed: ${e.message}")
+        }
+        return null
+    }
+
+    private suspend fun getAmazonStreamUrl(trackId: String): String? {
+        val baseUrl = "https://amz.geeked.wtf"
+        val url = "$baseUrl/track?id=$trackId&quality=HD"
+        android.util.Log.d("ChromePlayer", "Amazon: trying $url")
+        try {
+            val req = okhttp3.Request.Builder().url(url).build()
+            val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
+            android.util.Log.d("ChromePlayer", "Amazon: HTTP ${resp.code}")
+            if (!resp.isSuccessful) { android.util.Log.w("ChromePlayer", "Amazon: returned ${resp.code}"); return null }
+            val body = resp.body?.string() ?: return null
+            android.util.Log.d("ChromePlayer", "Amazon: response ${body.take(200)}")
+            val data = Gson().fromJson(body, Map::class.java)
+            return data["stream_url"]?.toString() ?: data["url"]?.toString()
+        } catch (e: Exception) {
+            android.util.Log.w("ChromePlayer", "Amazon: request failed: ${e.message}")
         }
         return null
     }
