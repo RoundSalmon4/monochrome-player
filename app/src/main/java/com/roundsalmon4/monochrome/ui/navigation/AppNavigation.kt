@@ -197,7 +197,8 @@ fun AppNavigation(
                     val route = backStackEntry.toRoute<Route.PlaylistDetail>()
                     PlaylistDetailScreen(
                         playlistId = route.playlistId,
-                        onTrackClick = {
+                        onTrackClick = { tracks, index ->
+                            playerStateManager.setQueue(tracks, index)
                             navController.navigate(Route.Player)
                         },
                         onBackClick = { navController.popBackStack() }
