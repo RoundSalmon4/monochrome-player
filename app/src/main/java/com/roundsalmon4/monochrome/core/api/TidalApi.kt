@@ -2,6 +2,10 @@ package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
+import com.roundsalmon4.monochrome.core.api.internal.TidalAuthClient
+import com.google.gson.annotations.SerializedName
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
@@ -23,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class TidalApi @Inject constructor(
     private val okHttpClient: OkHttpClient,
+    private val authClient: TidalAuthClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -96,8 +101,26 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(trackId: String): StreamUrl {
-        val response = tryInstances { it.getTrack(trackId) }
-        val data = response.data ?: throw RuntimeException("No stream info for track $trackId")
+        val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
+        val token = authClient.getToken()
+
+        val url = "https://api.tidal.com/v1/tracks/$trackNum/playbackinfo"
+        val params = "audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US"
+
+        val request = okhttp3.Request.Builder()
+            .url("$url?$params")
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        val response = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            okHttpClient.newCall(request).execute()
+        }
+        if (!response.isSuccessful) {
+            throw RuntimeException("TIDAL streaming API returned ${response.code}: ${response.body?.string()}")
+        }
+
+        val json = response.body?.string() ?: throw RuntimeException("Empty streaming response")
+        val data = Gson().fromJson(json, PlaybackInfoData::class.java)
 
         val manifestStr = data.manifest ?: throw RuntimeException("No manifest for track $trackId")
         val decoded = try {
@@ -198,4 +221,14 @@ class TidalApi @Inject constructor(
         return if (picture.startsWith("http")) picture
         else "https://resources.tidal.com/images/$picture/320x320.jpg"
     }
+
+    private data class PlaybackInfoData(
+        val manifest: String? = null,
+        @SerializedName("manifestHash") val manifestHash: String? = null,
+        @SerializedName("assetPresentation") val assetPresentation: String? = null,
+        @SerializedName("audioQuality") val audioQuality: String? = null,
+        @SerializedName("audioMode") val audioMode: String? = null,
+        @SerializedName("trackId") val trackId: Int? = null,
+        @SerializedName("albumId") val albumId: Int? = null
+    )
 }
