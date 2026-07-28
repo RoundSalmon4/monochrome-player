@@ -107,21 +107,41 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(trackId: String, isrc: String = ""): StreamUrl {
+        // Qobuz: direct FLAC, no DRM. Primary source.
         if (isrc.isNotBlank()) {
             try {
-                val qobuzUrl = getQobuzStreamUrl(isrc)
-                if (qobuzUrl != null) return StreamUrl(url = qobuzUrl, mimeType = "audio/flac")
-            } catch (e: Exception) {
-                android.util.Log.w("ChromePlayer", "Qobuz failed for $isrc: ${e.message}")
-            }
+                val url = getQobuzStreamUrl(isrc)
+                if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
+            } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
+            // Deezer: backup when Qobuz fails
             try {
-                val deezerUrl = getDeezerStreamUrl(isrc)
-                if (deezerUrl != null) return StreamUrl(url = deezerUrl, mimeType = "audio/mp4")
-            } catch (e: Exception) {
-                android.util.Log.w("ChromePlayer", "Deezer failed for $isrc: ${e.message}")
-            }
+                val url = getDeezerStreamUrl(isrc)
+                if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
+            } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
         }
-        throw RuntimeException("Could not resolve stream from Qobuz or Deezer for track $trackId")
+        // Last resort: TIDAL proxy (30s preview only, but better than silence)
+        android.util.Log.w("ChromePlayer", "All external providers failed, falling back to TIDAL preview for $trackId")
+        return getTidalPreviewStreamUrl(trackId)
+    }
+
+    private suspend fun getTidalPreviewStreamUrl(trackId: String): StreamUrl {
+        val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
+        val token = authClient.getToken()
+        val req = okhttp3.Request.Builder()
+            .url("https://tidal-proxy.monochrome.tf/api/v1/tracks/$trackNum/playbackinfo?audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US")
+            .header("Authorization", "Bearer $token").build()
+        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
+        if (!resp.isSuccessful) throw RuntimeException("TIDAL proxy returned ${resp.code}")
+        val json = resp.body?.string() ?: throw RuntimeException("Empty response")
+        val data = Gson().fromJson(json, Map::class.java)
+        val manifestStr = data["manifest"]?.toString() ?: throw RuntimeException("No manifest")
+        val decoded = try { String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT)) } catch (_: Exception) { manifestStr }
+        if (decoded.contains("<MPD")) {
+            val url = Regex("""initialization="([^"]+)"""").find(decoded)?.groupValues?.getOrNull(1)
+                ?: throw RuntimeException("No URL in manifest")
+            return StreamUrl(url = url.replace("&amp;", "&"), mimeType = "audio/mp4")
+        }
+        throw RuntimeException("Unrecognized manifest format")
     }
 
     private val streamGson = Gson()
@@ -246,7 +266,8 @@ class TidalApi @Inject constructor(
                 albumTitle = albumMap?.get("title")?.toString() ?: "Unknown Album",
                 coverUrl = albumCoverUrl(albumMap?.get("cover")?.toString()),
                 durationMs = ((item["duration"] as? Number)?.toLong() ?: 0L) * 1000L,
-                trackNumber = (item["trackNumber"] as? Number)?.toInt() ?: 0
+                trackNumber = (item["trackNumber"] as? Number)?.toInt() ?: 0,
+                isrc = item["isrc"]?.toString() ?: ""
             )
         }
     }
