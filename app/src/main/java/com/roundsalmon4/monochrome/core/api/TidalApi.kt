@@ -4,7 +4,6 @@ import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.TidalAuthClient
-import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
@@ -108,51 +107,24 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(trackId: String, isrc: String = ""): StreamUrl {
-        // Qobuz provides direct FLAC streams without DRM. Try it first if we have an ISRC.
         if (isrc.isNotBlank()) {
             try {
                 val qobuzUrl = getQobuzStreamUrl(isrc)
                 if (qobuzUrl != null) return StreamUrl(url = qobuzUrl, mimeType = "audio/flac")
             } catch (e: Exception) {
-                android.util.Log.w("ChromePlayer", "Qobuz failed for $isrc, TIDAL fallback: ${e.message}")
+                android.util.Log.w("ChromePlayer", "Qobuz failed for $isrc: ${e.message}")
+            }
+            try {
+                val deezerUrl = getDeezerStreamUrl(isrc)
+                if (deezerUrl != null) return StreamUrl(url = deezerUrl, mimeType = "audio/mp4")
+            } catch (e: Exception) {
+                android.util.Log.w("ChromePlayer", "Deezer failed for $isrc: ${e.message}")
             }
         }
-
-        val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
-        val token = authClient.getToken()
-        val apiUrl = "https://tidal-proxy.monochrome.tf/api/v1/tracks/$trackNum/playbackinfo"
-        val params = "audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US"
-
-        val request = okhttp3.Request.Builder().url("$apiUrl?$params")
-            .header("Authorization", "Bearer $token").build()
-        val response = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
-        if (!response.isSuccessful)
-            throw RuntimeException("TIDAL streaming API returned ${response.code}: ${response.body?.string()}")
-
-        val json = response.body?.string() ?: throw RuntimeException("Empty streaming response")
-        val data = Gson().fromJson(json, PlaybackInfoData::class.java)
-        val manifestStr = data.manifest ?: throw RuntimeException("No manifest for track $trackId")
-        val decoded = try {
-            String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT))
-        } catch (_: Exception) { manifestStr }
-
-        if (decoded.contains("<MPD")) {
-            val url = Regex("""initialization="([^"]+)"""").find(decoded)?.groupValues?.getOrNull(1)
-                ?: Regex("<BaseURL[^>]*>(.*?)</BaseURL>").find(decoded)?.groupValues?.getOrNull(1)
-                ?: throw RuntimeException("No stream URL found in DASH manifest")
-            return StreamUrl(url = url.replace("&amp;", "&"), mimeType = "audio/mp4")
-        }
-
-        val url = try {
-            val gson = Gson()
-            val manifestJson = gson.fromJson(decoded, Map::class.java)
-            val urls = manifestJson["urls"] as? List<String>
-            urls?.firstOrNull() ?: decoded.trim()
-        } catch (_: Exception) { decoded.trim() }
-        return StreamUrl(url = url, mimeType = "audio/mp4")
+        throw RuntimeException("Could not resolve stream from Qobuz or Deezer for track $trackId")
     }
 
-    private val qobuzGson = Gson()
+    private val streamGson = Gson()
 
     private suspend fun getQobuzStreamUrl(isrc: String): String? {
         val baseUrl = "https://qobuz.kennyy.com.br"
@@ -167,7 +139,7 @@ class TidalApi @Inject constructor(
             return null
         }
         val searchBody = searchResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty body") }
-        val searchData = qobuzGson.fromJson(searchBody, Map::class.java)
+        val searchData = streamGson.fromJson(searchBody, Map::class.java)
         android.util.Log.d("ChromePlayer", "Qobuz search response: ${searchBody.take(200)}")
 
         val items = (searchData["data"] as? Map<*, *>)
@@ -199,7 +171,7 @@ class TidalApi @Inject constructor(
             return null
         }
         val streamBody = streamResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty download body") }
-        val streamData = qobuzGson.fromJson(streamBody, Map::class.java)
+        val streamData = streamGson.fromJson(streamBody, Map::class.java)
         if (streamData["success"] == true) {
             val url = (streamData["data"] as? Map<*, *>)?.get("url")?.toString()
             android.util.Log.d("ChromePlayer", if (url != null) "Qobuz: got stream URL" else "Qobuz: no URL in response")
@@ -279,11 +251,30 @@ class TidalApi @Inject constructor(
         }
     }
 
+    private suspend fun getDeezerStreamUrl(isrc: String): String? {
+        val baseUrl = "https://deezer-proxy.tony.com.br"
+        val format = "FLAC"
+        val url = "$baseUrl/stream/?isrc=${java.net.URLEncoder.encode(isrc, "UTF-8")}&format=$format"
+        android.util.Log.d("ChromePlayer", "Deezer: trying $url")
+        try {
+            val req = okhttp3.Request.Builder().url(url).head().build()
+            val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
+            android.util.Log.d("ChromePlayer", "Deezer: HTTP ${resp.code}")
+            if (resp.isSuccessful || resp.code == 405 || resp.code == 501) return url
+            android.util.Log.w("ChromePlayer", "Deezer: returned ${resp.code}")
+        } catch (e: Exception) {
+            android.util.Log.w("ChromePlayer", "Deezer: request failed: ${e.message}")
+        }
+        return null
+    }
+
     private fun albumCoverUrl(cover: String?): String {
         if (cover.isNullOrBlank()) return ""
         if (cover.startsWith("http")) return cover
         val path = cover.replace("-", "/")
-        return "https://resources.tidal.com/images/$path/640x640.jpg"
+        val result = "https://resources.tidal.com/images/$path/640x640.jpg"
+        android.util.Log.v("ChromePlayer", "Cover URL: $result")
+        return result
     }
 
     private fun artistPictureUrl(picture: String?): String {
@@ -292,14 +283,4 @@ class TidalApi @Inject constructor(
         val path = picture.replace("-", "/")
         return "https://resources.tidal.com/images/$path/320x320.jpg"
     }
-
-    private data class PlaybackInfoData(
-        val manifest: String? = null,
-        @SerializedName("manifestHash") val manifestHash: String? = null,
-        @SerializedName("assetPresentation") val assetPresentation: String? = null,
-        @SerializedName("audioQuality") val audioQuality: String? = null,
-        @SerializedName("audioMode") val audioMode: String? = null,
-        @SerializedName("trackId") val trackId: Int? = null,
-        @SerializedName("albumId") val albumId: Int? = null
-    )
 }
