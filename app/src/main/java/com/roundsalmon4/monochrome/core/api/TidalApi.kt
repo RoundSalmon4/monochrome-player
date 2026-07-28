@@ -107,26 +107,27 @@ class TidalApi @Inject constructor(
         return response.data?.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
-    suspend fun getTrackStreamUrl(trackId: String): StreamUrl {
+    suspend fun getTrackStreamUrl(trackId: String, isrc: String = ""): StreamUrl {
+        // Qobuz provides direct FLAC streams without DRM. Try it first if we have an ISRC.
+        if (isrc.isNotBlank()) {
+            try {
+                val qobuzUrl = getQobuzStreamUrl(isrc)
+                if (qobuzUrl != null) return StreamUrl(url = qobuzUrl, mimeType = "audio/flac")
+            } catch (e: Exception) {
+                android.util.Log.w("ChromePlayer", "Qobuz failed for $isrc, TIDAL fallback: ${e.message}")
+            }
+        }
+
         val trackNum = trackId.toLongOrNull() ?: throw RuntimeException("Invalid track ID: $trackId")
         val token = authClient.getToken()
-
-        // Route through the TIDAL proxy which handles Widevine DRM and
-        // may upgrade the token for FULL asset presentation
         val apiUrl = "https://tidal-proxy.monochrome.tf/api/v1/tracks/$trackNum/playbackinfo"
         val params = "audioquality=HI_RES_LOSSLESS&playbackmode=STREAM&assetpresentation=FULL&countryCode=US"
 
-        val request = okhttp3.Request.Builder()
-            .url("$apiUrl?$params")
-            .header("Authorization", "Bearer $token")
-            .build()
-
-        val response = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            okHttpClient.newCall(request).execute()
-        }
-        if (!response.isSuccessful) {
+        val request = okhttp3.Request.Builder().url("$apiUrl?$params")
+            .header("Authorization", "Bearer $token").build()
+        val response = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
+        if (!response.isSuccessful)
             throw RuntimeException("TIDAL streaming API returned ${response.code}: ${response.body?.string()}")
-        }
 
         val json = response.body?.string() ?: throw RuntimeException("Empty streaming response")
         val data = Gson().fromJson(json, PlaybackInfoData::class.java)
@@ -135,27 +136,55 @@ class TidalApi @Inject constructor(
             String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT))
         } catch (_: Exception) { manifestStr }
 
-        // DASH manifest: extract stream URL. TIDAL uses SegmentTemplate
-        // with an initialization attribute (a signed URL to the first segment).
-        // If no SegmentTemplate, fall back to BaseURL.
         if (decoded.contains("<MPD")) {
             val url = Regex("""initialization="([^"]+)"""").find(decoded)?.groupValues?.getOrNull(1)
                 ?: Regex("<BaseURL[^>]*>(.*?)</BaseURL>").find(decoded)?.groupValues?.getOrNull(1)
                 ?: throw RuntimeException("No stream URL found in DASH manifest")
-            // Unescape HTML entities in URL
-            val clean = url.replace("&amp;", "&")
-            return StreamUrl(url = clean, mimeType = "audio/mp4")
+            return StreamUrl(url = url.replace("&amp;", "&"), mimeType = "audio/mp4")
         }
 
-        // JSON manifest: extract urls array
         val url = try {
             val gson = Gson()
             val manifestJson = gson.fromJson(decoded, Map::class.java)
             val urls = manifestJson["urls"] as? List<String>
             urls?.firstOrNull() ?: decoded.trim()
         } catch (_: Exception) { decoded.trim() }
-
         return StreamUrl(url = url, mimeType = "audio/mp4")
+    }
+
+    private val qobuzGson = Gson()
+
+    private suspend fun getQobuzStreamUrl(isrc: String): String? {
+        val baseUrl = "https://qobuz.kennyy.com.br"
+        val searchUrl = "$baseUrl/api/get-music?q=${java.net.URLEncoder.encode(isrc, "UTF-8")}&offset=0"
+        val searchResp = withContext(Dispatchers.IO) {
+            okHttpClient.newCall(okhttp3.Request.Builder().url(searchUrl).build()).execute()
+        }
+        if (!searchResp.isSuccessful) return null
+        val searchData = qobuzGson.fromJson(searchResp.body?.string(), Map::class.java) ?: return null
+
+        val items = (searchData["data"] as? Map<*, *>)
+            ?.let { it["tracks"] as? Map<*, *> }
+            ?.let { it["items"] as? List<*> } ?: return null
+
+        val match = items.firstNotNullOfOrNull { item ->
+            val m = item as? Map<*, *> ?: return@firstNotNullOfOrNull null
+            if (m["isrc"]?.toString()?.lowercase() == isrc.lowercase()) m else null
+        } ?: return null
+
+        val qobuzTrackId = match["id"]?.toString() ?: return null
+        val quality = "27" // HI_RES_LOSSLESS
+        val streamResp = withContext(Dispatchers.IO) {
+            okHttpClient.newCall(
+                okhttp3.Request.Builder().url("$baseUrl/api/download-music?track_id=$qobuzTrackId&quality=$quality").build()
+            ).execute()
+        }
+        if (!streamResp.isSuccessful) return null
+        val streamData = qobuzGson.fromJson(streamResp.body?.string(), Map::class.java) ?: return null
+        if (streamData["success"] == true) {
+            return (streamData["data"] as? Map<*, *>)?.get("url")?.toString()
+        }
+        return null
     }
 
     private fun determineMimeType(url: String, manifest: String): String = when {
@@ -170,7 +199,8 @@ class TidalApi @Inject constructor(
         artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
         albumId = album?.id ?: "", albumTitle = album?.title ?: "Unknown Album",
         coverUrl = albumCoverUrl(album?.cover),
-        durationMs = (duration ?: 0) * 1000L, trackNumber = trackNumber ?: 0
+        durationMs = (duration ?: 0) * 1000L, trackNumber = trackNumber ?: 0,
+        isrc = isrc ?: ""
     )
 
     private fun AlbumItem.toAlbum() = Album(

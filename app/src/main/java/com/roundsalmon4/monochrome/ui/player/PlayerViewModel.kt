@@ -86,7 +86,7 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             try {
-                val streamUrl = tidalApi.getTrackStreamUrl(track.id)
+                val streamUrl = tidalApi.getTrackStreamUrl(track.id, track.isrc)
                 playerController.play(streamUrl.url, streamUrl.mimeType)
                 PlaybackService.start(playerController, context)
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)

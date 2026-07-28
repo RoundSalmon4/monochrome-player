@@ -33,7 +33,8 @@ data class Track(
     val albumTitle: String,
     val coverUrl: String,
     val durationMs: Long = 0L,
-    val trackNumber: Int = 0
+    val trackNumber: Int = 0,
+    val isrc: String = ""
 )
 
 data class StreamUrl(
