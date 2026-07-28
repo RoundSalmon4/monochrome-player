@@ -128,24 +128,27 @@ class TidalApi @Inject constructor(
 
         val json = response.body?.string() ?: throw RuntimeException("Empty streaming response")
         val data = Gson().fromJson(json, PlaybackInfoData::class.java)
-
         val manifestStr = data.manifest ?: throw RuntimeException("No manifest for track $trackId")
         val decoded = try {
             String(android.util.Base64.decode(manifestStr, android.util.Base64.DEFAULT))
         } catch (_: Exception) { manifestStr }
 
-        val url = if (decoded.contains("<MPD")) {
-            "data:application/dash+xml;base64,$manifestStr"
-        } else {
-            try {
-                val gson = Gson()
-                val manifestJson = gson.fromJson(decoded, Map::class.java)
-                val urls = manifestJson["urls"] as? List<String>
-                urls?.firstOrNull() ?: decoded.trim()
-            } catch (_: Exception) { decoded.trim() }
+        // DASH manifest: extract the first BaseURL from the XML
+        if (decoded.contains("<MPD") || decoded.contains("<BaseURL")) {
+            val baseUrl = Regex("<BaseURL[^>]*>(.*?)</BaseURL>").find(decoded)?.groupValues?.getOrNull(1)
+                ?: throw RuntimeException("No BaseURL found in DASH manifest")
+            return StreamUrl(url = baseUrl, mimeType = "audio/mp4")
         }
 
-        return StreamUrl(url = url, mimeType = determineMimeType(url, decoded))
+        // JSON manifest: extract urls array
+        val url = try {
+            val gson = Gson()
+            val manifestJson = gson.fromJson(decoded, Map::class.java)
+            val urls = manifestJson["urls"] as? List<String>
+            urls?.firstOrNull() ?: decoded.trim()
+        } catch (_: Exception) { decoded.trim() }
+
+        return StreamUrl(url = url, mimeType = "audio/mp4")
     }
 
     private fun determineMimeType(url: String, manifest: String): String = when {
