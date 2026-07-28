@@ -252,7 +252,7 @@ class TidalApi @Inject constructor(
     }
 
     private suspend fun getDeezerStreamUrl(isrc: String): String? {
-        val baseUrl = "https://deezer-proxy.tony.com.br"
+        val baseUrl = "https://dzr.tabs-vs-spaces.wtf"
         val format = "FLAC"
         val url = "$baseUrl/stream/?isrc=${java.net.URLEncoder.encode(isrc, "UTF-8")}&format=$format"
         android.util.Log.d("ChromePlayer", "Deezer: trying $url")
