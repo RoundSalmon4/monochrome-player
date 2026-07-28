@@ -37,7 +37,7 @@ class TidalAuthClient @Inject constructor() {
         val clientId = "txNoH4kkV41MfH25"
         val clientSecret = "dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98="
 
-        val basic = "Basic " + Base64.encodeToString("$clientId:$clientSecret".toByteArray(), Base64.DEFAULT).trim()
+        val basic = "Basic " + Base64.encodeToString("$clientId:$clientSecret".toByteArray(), Base64.NO_WRAP)
 
         val body = FormBody.Builder()
             .add("grant_type", "client_credentials")

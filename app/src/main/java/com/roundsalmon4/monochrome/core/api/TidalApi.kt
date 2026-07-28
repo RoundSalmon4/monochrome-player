@@ -1,6 +1,7 @@
 package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.TidalAuthClient
 import com.google.gson.annotations.SerializedName
@@ -91,8 +92,14 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getArtist(artistId: String): Artist {
-        val response = tryInstances { it.getArtist(artistId) }
-        return response.data?.toArtist() ?: throw RuntimeException("Artist not found")
+        val json = tryInstances { it.getArtist(artistId) }
+        // Handle both {"version":"2.x","data":{"id":...,"name":...}} and
+        // {"version":"2.x","artist":{"id":...,"name":...},"cover":{...}} formats
+        val data = json.get("data")?.asJsonObject ?: json.get("artist")?.asJsonObject
+            ?: throw RuntimeException("Artist not found")
+        val gson = Gson()
+        val detail = gson.fromJson(data, ArtistResponseData::class.java)
+        return detail.toArtist()
     }
 
     suspend fun getArtistAlbums(artistId: String): List<Album> {
@@ -212,14 +219,16 @@ class TidalApi @Inject constructor(
 
     private fun albumCoverUrl(cover: String?): String {
         if (cover.isNullOrBlank()) return ""
-        return if (cover.startsWith("http")) cover
-        else "https://resources.tidal.com/images/$cover/640x640.jpg"
+        if (cover.startsWith("http")) return cover
+        val path = cover.replace("-", "/")
+        return "https://resources.tidal.com/images/$path/640x640.jpg"
     }
 
     private fun artistPictureUrl(picture: String?): String {
         if (picture.isNullOrBlank()) return ""
-        return if (picture.startsWith("http")) picture
-        else "https://resources.tidal.com/images/$picture/320x320.jpg"
+        if (picture.startsWith("http")) return picture
+        val path = picture.replace("-", "/")
+        return "https://resources.tidal.com/images/$path/320x320.jpg"
     }
 
     private data class PlaybackInfoData(

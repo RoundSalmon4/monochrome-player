@@ -26,7 +26,7 @@ interface TidalApiService {
     ): ApiResponse<AlbumResponseData>
 
     @GET("artist/")
-    suspend fun getArtist(@Query("id") artistId: String): ApiResponse<ArtistResponseData>
+    suspend fun getArtist(@Query("id") artistId: String): com.google.gson.JsonObject
 
     @GET("artist/")
     suspend fun getArtistAlbums(
