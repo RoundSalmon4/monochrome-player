@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.library
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.database.HistoryDao
@@ -94,7 +95,7 @@ class LibraryViewModel @Inject constructor(
                 playlistDao.updatePlaylist(playlist.copy(trackCount = count + 1))
                 _addToPlaylistEntry.value = null
             } catch (e: Exception) {
-                Log.e(TAG, "addToPlaylist failed", e)
+                Log.e("ChromePlayer", "addToPlaylist failed", e)
             }
         }
     }
@@ -115,12 +116,10 @@ class LibraryViewModel @Inject constructor(
                 )
                 _addToPlaylistEntry.value = null
             } catch (e: Exception) {
-                Log.e(TAG, "createPlaylistAndAdd failed", e)
+                Log.e("ChromePlayer", "createPlaylistAndAdd failed", e)
             }
         }
     }
 
-    companion object {
-        private const val TAG = "LibraryVM"
-    }
+
 }

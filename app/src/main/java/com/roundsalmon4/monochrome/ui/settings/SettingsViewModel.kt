@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.settings
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.database.ExportData
@@ -145,6 +146,7 @@ class SettingsViewModel @Inject constructor(
 
                 _importResult.value = "Import complete"
             } catch (e: Exception) {
+                Log.e("ChromePlayer", "Settings import failed", e)
                 _importResult.value = "Import failed: ${e.message?.take(100)}"
             }
         }

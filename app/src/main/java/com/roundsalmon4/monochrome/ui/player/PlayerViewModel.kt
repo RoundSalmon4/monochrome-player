@@ -1,6 +1,7 @@
 package com.roundsalmon4.monochrome.ui.player
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.TidalApi
@@ -88,6 +89,7 @@ class PlayerViewModel @Inject constructor(
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)
                 _uiState.value = _uiState.value.copy(isPlaying = true, isLoading = false)
             } catch (e: Exception) {
+                Log.e("ChromePlayer", "playTrack failed for track=${track.id} ${track.title}", e)
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message ?: "Playback failed")
             }
         }

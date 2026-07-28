@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.search
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.TidalApi
@@ -58,10 +59,11 @@ class SearchViewModel @Inject constructor(
                 artists = results.artists.take(10)
             )
         } catch (e: Exception) {
-            _uiState.value = _uiState.value.copy(
-                isSearching = false,
-                error = e.message ?: "Search failed"
-            )
+                Log.e("ChromePlayer", "Search failed for query=$query", e)
+                _uiState.value = _uiState.value.copy(
+                    isSearching = false,
+                    error = e.message ?: "Search failed"
+                )
         }
     }
 }

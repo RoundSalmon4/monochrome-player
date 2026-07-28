@@ -53,7 +53,7 @@ android {
         release {
             isMinifyEnabled = false
             isShrinkResources = false
-            signingConfig = signingConfigs.getByName("fromKeystore")
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

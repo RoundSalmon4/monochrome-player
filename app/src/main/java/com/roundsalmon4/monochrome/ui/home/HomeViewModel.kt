@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.home
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.TidalApi
@@ -39,6 +40,7 @@ class HomeViewModel @Inject constructor(
                     newReleases = results.take(50)
                 )
             } catch (e: Exception) {
+                Log.e("ChromePlayer", "Home loadNewReleases failed", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     error = e.message ?: "Failed to load"

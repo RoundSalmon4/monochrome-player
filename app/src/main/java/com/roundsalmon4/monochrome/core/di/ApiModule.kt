@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.core.di
 
+import com.google.gson.GsonBuilder
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import dagger.Module
 import dagger.Provides
@@ -22,13 +23,14 @@ object ApiModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+        val logging = HttpLoggingInterceptor { message ->
+            android.util.Log.println(android.util.Log.DEBUG, "ChromePlayer-Http", message)
+        }.apply {
+            level = HttpLoggingInterceptor.Level.BODY
         }
         val userAgent = Interceptor { chain ->
             val request = chain.request().newBuilder()
-                .header("User-Agent", "ChromePlayer/0.1")
-                .header("Origin", "https://monochrome.tf")
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
                 .build()
             chain.proceed(request)
         }
@@ -44,10 +46,11 @@ object ApiModule {
     @Provides
     @Singleton
     fun provideRetrofit(client: OkHttpClient): Retrofit {
+        val gson = GsonBuilder().setLenient().create()
         return Retrofit.Builder()
             .baseUrl(DEFAULT_API_URL)
             .client(client)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(GsonConverterFactory.create(gson))
             .build()
     }
 

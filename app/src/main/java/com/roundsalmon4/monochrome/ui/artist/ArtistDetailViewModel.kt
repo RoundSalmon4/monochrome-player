@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.artist
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.TidalApi
@@ -39,6 +40,7 @@ class ArtistDetailViewModel @Inject constructor(
                 val albums = tidalApi.getArtistAlbums(artistId)
                 _uiState.value = ArtistDetailUiState(artist = artist, albums = albums)
             } catch (e: Exception) {
+                Log.e("ChromePlayer", "Artist load failed for id=$artistId", e)
                 _uiState.value = ArtistDetailUiState(error = e.message ?: "Failed to load artist")
             }
         }
