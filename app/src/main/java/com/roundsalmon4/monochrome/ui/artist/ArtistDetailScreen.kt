@@ -114,7 +114,7 @@ private fun AlbumCard(album: Album, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
             Text(album.artistName, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp, bottom = 8.dp))
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp))
         }
     }
 }

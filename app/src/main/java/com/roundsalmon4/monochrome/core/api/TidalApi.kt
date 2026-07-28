@@ -45,10 +45,9 @@ class TidalApi @Inject constructor(
 
     suspend fun getAlbum(albumId: String): Pair<Album, List<Track>> {
         val response = service.getAlbum(albumId)
-        val data = response.data ?: response
-        val detail = data.album ?: throw RuntimeException("Album not found")
+        val detail = response.data?.album ?: response.album ?: throw RuntimeException("Album not found")
         val album = detail.toAlbum()
-        val rawItems = data.items ?: response.items ?: emptyList()
+        val rawItems = response.data?.items ?: response.items ?: emptyList()
 
         var tracks = rawItems.mapNotNull { it.item?.toTrack() }
 
@@ -59,8 +58,7 @@ class TidalApi @Inject constructor(
             while (tracks.size < totalExpected && tracks.size < 10000) {
                 try {
                     val next = service.getAlbumTracks(albumId, offset)
-                    val nextData = next.data ?: next
-                    val nextItems = nextData.items ?: next.items ?: break
+                    val nextItems = next.data?.items ?: next.items ?: break
                     val newTracks = nextItems.mapNotNull { it.item?.toTrack() }
                     if (newTracks.isEmpty()) break
                     if (newTracks.first().id in seen) break
@@ -69,27 +67,24 @@ class TidalApi @Inject constructor(
                 } catch (_: Exception) { break }
             }
         }
-        return album to tracks
+        return Pair(album, tracks)
     }
 
     suspend fun getArtist(artistId: String): Artist {
         val response = service.getArtist(artistId)
-        val data = response.data ?: response
-        val detail = data.artist ?: throw RuntimeException("Artist not found")
+        val detail = response.data?.artist ?: response.artist ?: throw RuntimeException("Artist not found")
         return detail.toArtist()
     }
 
     suspend fun getArtistAlbums(artistId: String): List<Album> {
         val response = service.getArtistAlbums(artistId)
-        val data = response.data ?: response
-        val items = data.items ?: response.items ?: emptyList()
+        val items = response.data?.items ?: response.items ?: emptyList()
         return items.mapNotNull { it.item?.toAlbum() }.distinctBy { it.id }
     }
 
     suspend fun getTrackStreamUrl(trackId: String): StreamUrl {
         val response = service.getTrack(trackId)
-        val data = response.data ?: response
-        val playbackInfo = data.info ?: throw RuntimeException("No stream info for track $trackId")
+        val playbackInfo = response.data?.info ?: response.info ?: throw RuntimeException("No stream info for track $trackId")
 
         val manifestStr = playbackInfo.manifest ?: throw RuntimeException("No manifest for track $trackId")
         val decoded = try {

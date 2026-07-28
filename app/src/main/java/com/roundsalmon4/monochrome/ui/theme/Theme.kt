@@ -67,7 +67,7 @@ fun MonochromeTheme(
         else -> lightColorScheme(
             background = LightBackground,
             surface = LightSurface,
-            surfaceVariant = LightSurfaceVariant,
+            surfaceVariant = Color(0xFFE7E0EC),
             primary = primary,
             secondary = secondary,
             tertiary = secondary.lighten(0.3f),

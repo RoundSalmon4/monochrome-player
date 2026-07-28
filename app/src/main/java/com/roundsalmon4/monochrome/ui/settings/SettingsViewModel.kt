@@ -76,7 +76,8 @@ class SettingsViewModel @Inject constructor(
                     tracks = tracks.map { t ->
                         PlaylistTrackExport(
                             trackId = t.trackId, title = t.title, artistName = t.artistName,
-                            coverUrl = t.coverUrl, durationMs = t.durationMs, position = t.position
+                            albumTitle = t.albumTitle, coverUrl = t.coverUrl,
+                            durationMs = t.durationMs, position = t.position
                         )
                     }
                 )
@@ -131,8 +132,9 @@ class SettingsViewModel @Inject constructor(
                         playlistDao.insertTrack(
                             com.roundsalmon4.monochrome.core.database.entity.PlaylistTrack(
                                 playlistId = id, trackId = track.trackId, title = track.title,
-                                artistName = track.artistName, coverUrl = track.coverUrl,
-                                durationMs = track.durationMs, position = track.position
+                                artistName = track.artistName, albumTitle = track.albumTitle,
+                                coverUrl = track.coverUrl, durationMs = track.durationMs,
+                                position = track.position
                             )
                         )
                     }

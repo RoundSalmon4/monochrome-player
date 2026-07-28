@@ -96,7 +96,7 @@ private fun AlbumCard(album: Album, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 8.dp, bottom = 8.dp)
+                modifier = Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)
             )
         }
     }

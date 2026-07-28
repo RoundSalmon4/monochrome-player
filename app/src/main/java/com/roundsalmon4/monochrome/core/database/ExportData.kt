@@ -37,6 +37,7 @@ data class PlaylistTrackExport(
     val trackId: String,
     val title: String,
     val artistName: String,
+    val albumTitle: String = "",
     val coverUrl: String,
     val durationMs: Long,
     val position: Int
