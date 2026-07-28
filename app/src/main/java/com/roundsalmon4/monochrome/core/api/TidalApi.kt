@@ -140,6 +140,17 @@ class TidalApi @Inject constructor(
         )
     }
 
+    private fun TrackItem.toAlbum(): Album {
+        return Album(
+            id = id ?: "", title = title ?: "Unknown Album",
+            artistName = artist?.name ?: artists?.firstOrNull()?.name ?: "Unknown Artist",
+            artistId = artist?.id ?: artists?.firstOrNull()?.id ?: "",
+            coverUrl = albumCoverUrl(album?.cover),
+            year = album?.releaseDate?.take(4)?.toIntOrNull() ?: 0,
+            trackCount = 0, durationMs = (duration ?: 0) * 1000L
+        )
+    }
+
     private fun AlbumDetail.toAlbum(): Album {
         return Album(
             id = id ?: "", title = title ?: "Unknown Album",
