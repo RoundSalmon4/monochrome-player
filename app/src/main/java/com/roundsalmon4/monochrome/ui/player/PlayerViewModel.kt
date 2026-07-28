@@ -4,8 +4,11 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.Player
 import com.roundsalmon4.monochrome.core.api.TidalApi
 import com.roundsalmon4.monochrome.core.api.model.Track
+import com.roundsalmon4.monochrome.core.database.HistoryDao
+import com.roundsalmon4.monochrome.core.database.entity.ListenHistoryEntry
 import com.roundsalmon4.monochrome.player.PlayerEngineController
 import com.roundsalmon4.monochrome.player.PlayerStateManager
 import com.roundsalmon4.monochrome.player.service.PlaybackService
@@ -16,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import androidx.media3.common.Player
 
 data class PlayerUiState(
     val currentTrack: Track? = null,
@@ -35,6 +37,7 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val tidalApi: TidalApi,
+    private val historyDao: HistoryDao,
     private val playerController: PlayerEngineController,
     private val playerStateManager: PlayerStateManager
 ) : ViewModel() {
@@ -87,6 +90,14 @@ class PlayerViewModel @Inject constructor(
                 playerController.play(streamUrl.url, streamUrl.mimeType)
                 PlaybackService.start(playerController, context)
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)
+                historyDao.upsert(
+                    ListenHistoryEntry(
+                        trackId = track.id, title = track.title, artistName = track.artistName,
+                        artistId = track.artistId, albumTitle = track.albumTitle,
+                        coverUrl = track.coverUrl, durationMs = track.durationMs,
+                        positionMs = 0L, timestamp = System.currentTimeMillis()
+                    )
+                )
                 _uiState.value = _uiState.value.copy(isPlaying = true, isLoading = false)
             } catch (e: Exception) {
                 Log.e("ChromePlayer", "playTrack failed for track=${track.id} ${track.title}", e)

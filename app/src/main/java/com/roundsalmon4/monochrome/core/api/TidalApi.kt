@@ -1,8 +1,6 @@
 package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
-import com.google.gson.JsonElement
-import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
@@ -163,23 +161,29 @@ class TidalApi @Inject constructor(
         imageUrl = artistPictureUrl(picture), albumCount = albumCount ?: 0
     )
 
+    @Suppress("UNCHECKED_CAST")
     private fun extractTracks(items: List<*>?): List<Track> {
         if (items == null) return emptyList()
-        val gson = Gson()
         return items.mapNotNull { element ->
-            when (element) {
-                is JsonObject -> {
-                    val wrapped = element.get("item")
-                    val trackEl = wrapped ?: element
-                    gson.fromJson(trackEl, TrackItem::class.java)?.toTrack()
-                }
-                is Map<*, *> -> {
-                    val wrapped = element["item"]
-                    val trackMap = (wrapped as? Map<*, *>) ?: element
-                    gson.fromJson(gson.toJsonTree(trackMap), TrackItem::class.java)?.toTrack()
-                }
-                else -> null
+            val map = element as? Map<String, Any?> ?: return@mapNotNull null
+            val item = (map["item"] as? Map<String, Any?>) ?: map
+            fun id(v: Any?): String = when (v) {
+                is Number -> v.toLong().toString()
+                else -> v?.toString() ?: ""
             }
+            val artistMap = item["artist"] as? Map<String, Any?>
+            val albumMap = item["album"] as? Map<String, Any?>
+            Track(
+                id = id(item["id"]),
+                title = item["title"]?.toString() ?: "Unknown Track",
+                artistName = artistMap?.get("name")?.toString() ?: "Unknown Artist",
+                artistId = id(artistMap?.get("id")),
+                albumId = id(albumMap?.get("id")),
+                albumTitle = albumMap?.get("title")?.toString() ?: "Unknown Album",
+                coverUrl = albumCoverUrl(albumMap?.get("cover")?.toString()),
+                durationMs = ((item["duration"] as? Number)?.toLong() ?: 0L) * 1000L,
+                trackNumber = (item["trackNumber"] as? Number)?.toInt() ?: 0
+            )
         }
     }
 
