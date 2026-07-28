@@ -8,27 +8,23 @@ plugins {
     alias(libs.plugins.room)
 }
 
-apply(from = rootProject.file("gradle/version.gradle.kts"))
-
-val appVersionCode: Int by extra
-val appVersionMajor: Int by extra
-val appVersionMinor: Int by extra
-val appVersionPatch: Int by extra
+val appVersionCode = 1
+val appVersionMajor = 0
+val appVersionMinor = 1
+val appVersionPatch = 0
 
 android {
-    namespace = "com.roundsalmon4.phonetube"
+    namespace = "com.roundsalmon4.monochrome"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.roundsalmon4.phonetube"
+        applicationId = "com.roundsalmon4.monochrome"
         minSdk = 24
         targetSdk = 35
         versionCode = appVersionCode
         versionName = "$appVersionMajor.$appVersionMinor.$appVersionPatch"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        missingDimensionStrategy("default", "ststable")
     }
 
     splits {
@@ -85,11 +81,6 @@ room {
 }
 
 dependencies {
-    // App modules (MediaServiceCore + SharedModules)
-    implementation(project(":youtubeapi"))
-    implementation(project(":mediaserviceinterfaces"))
-    implementation(project(":sharedutils"))
-
     // Compose
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -110,7 +101,7 @@ dependencies {
     // Navigation
     implementation(libs.navigation.compose)
 
-    // Serialization (for Navigation type-safe routes)
+    // Serialization
     implementation(libs.serialization.json)
 
     // Hilt
@@ -142,11 +133,6 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.rx2)
-
-    // RxJava (transitive from MediaServiceCore, but we use it for bridging)
-    implementation(libs.rxjava)
-    implementation(libs.rxandroid)
 
     // AndroidX
     implementation(libs.core.ktx)

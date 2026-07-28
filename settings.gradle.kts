@@ -21,26 +21,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PhoneTube"
+rootProject.name = "ChromePlayer"
 
 include(":app")
-
-// SharedModules
-include(":sharedutils")
-project(":sharedutils").projectDir = file("SharedModules/sharedutils")
-
-include(":sharedtests")
-project(":sharedtests").projectDir = file("SharedModules/sharedtests")
-
-include(":commons-io-2.8.0")
-project(":commons-io-2.8.0").projectDir = file("SharedModules/commons-io-2.8.0")
-
-include(":j2v8")
-project(":j2v8").projectDir = file("SharedModules/j2v8")
-
-// MediaServiceCore
-include(":mediaserviceinterfaces")
-project(":mediaserviceinterfaces").projectDir = file("MediaServiceCore/mediaserviceinterfaces")
-
-include(":youtubeapi")
-project(":youtubeapi").projectDir = file("MediaServiceCore/youtubeapi")
