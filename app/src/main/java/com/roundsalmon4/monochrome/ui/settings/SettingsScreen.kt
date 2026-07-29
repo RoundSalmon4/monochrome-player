@@ -94,6 +94,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                 .verticalScroll(rememberScrollState())
         ) {
             PlayerSection(uiState, viewModel)
+            AmazonSection(viewModel)
             AppearanceSection(uiState, viewModel)
             DataSection(viewModel, exportResult, importResult)
             AboutSection()
@@ -366,6 +367,30 @@ private fun AboutSection() {
             headlineContent = { Text("Source Code", fontWeight = FontWeight.SemiBold) },
             supportingContent = { Text("View the project on GitHub") },
             trailingContent = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AmazonSection(viewModel: SettingsViewModel) {
+    var jwtInput by remember { mutableStateOf("") }
+    Column {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsCategory("Amazon Music Streaming")
+
+        if (jwtInput.isNotEmpty()) {
+            TextButton(onClick = { viewModel.setAmazonJwt(jwtInput.trim()); jwtInput = "" }) {
+                Text("Save JWT")
+            }
+        }
+
+        OutlinedTextField(
+            value = jwtInput,
+            onValueChange = { jwtInput = it },
+            label = { Text("Paste Amazon JWT from browser") },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            singleLine = true
         )
     }
 }
