@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -30,6 +31,8 @@ private object Keys {
     val SECONDARY_COLOR = intPreferencesKey("secondary_color")
     val COLOR_SCHEME_MODE = stringPreferencesKey("color_scheme_mode")
     val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
+    val AMAZON_JWT = stringPreferencesKey("amazon_jwt")
+    val AMAZON_JWT_EXPIRY = stringPreferencesKey("amazon_jwt_expiry")
 }
 
 data class PreferencesUiState(
@@ -103,5 +106,19 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun setPiPEnabled(enabled: Boolean) {
         context.playerDataStore.edit { it[Keys.PIP_ENABLED] = enabled }
+    }
+
+    suspend fun setAmazonJwt(jwt: String, expiryTimestamp: Long) {
+        context.playerDataStore.edit {
+            it[Keys.AMAZON_JWT] = jwt
+            it[Keys.AMAZON_JWT_EXPIRY] = expiryTimestamp.toString()
+        }
+    }
+
+    suspend fun getAmazonJwt(): Pair<String, Long>? {
+        val prefs = context.playerDataStore.data.first()
+        val jwt = prefs[Keys.AMAZON_JWT] ?: return null
+        val expiry = prefs[Keys.AMAZON_JWT_EXPIRY]?.toLongOrNull() ?: 0L
+        return Pair(jwt, expiry)
     }
 }
