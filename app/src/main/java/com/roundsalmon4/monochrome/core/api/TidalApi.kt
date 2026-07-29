@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
@@ -26,6 +27,7 @@ import javax.inject.Singleton
 @Singleton
 class TidalApi @Inject constructor(
     private val okHttpClient: OkHttpClient,
+    private val amazonMusicClient: AmazonMusicClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -271,20 +273,13 @@ class TidalApi @Inject constructor(
     }
 
     private suspend fun getAmazonStreamUrl(trackId: String): String? {
-        val baseUrl = "https://amz.geeked.wtf"
-        val url = "$baseUrl/track?id=$trackId&quality=HD"
-        android.util.Log.d("ChromePlayer", "Amazon: trying $url")
+        android.util.Log.d("ChromePlayer", "Amazon: trying track $trackId via Turnstile auth")
         try {
-            val req = okhttp3.Request.Builder().url(url).build()
-            val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-            android.util.Log.d("ChromePlayer", "Amazon: HTTP ${resp.code}")
-            if (!resp.isSuccessful) { android.util.Log.w("ChromePlayer", "Amazon: returned ${resp.code}"); return null }
-            val body = resp.body?.string() ?: return null
-            android.util.Log.d("ChromePlayer", "Amazon: response ${body.take(200)}")
-            val data = Gson().fromJson(body, Map::class.java)
-            return data["stream_url"]?.toString() ?: data["url"]?.toString()
+            val result = amazonMusicClient.getStreamUrl(trackId)
+            if (result != null) android.util.Log.d("ChromePlayer", "Amazon: got stream URL")
+            return result?.url
         } catch (e: Exception) {
-            android.util.Log.w("ChromePlayer", "Amazon: request failed: ${e.message}")
+            android.util.Log.w("ChromePlayer", "Amazon: failed: ${e.message}")
         }
         return null
     }
