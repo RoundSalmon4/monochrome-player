@@ -388,10 +388,14 @@ private fun AmazonSection(viewModel: SettingsViewModel) {
         OutlinedTextField(
             value = jwtInput,
             onValueChange = { jwtInput = it },
-            label = { Text("Paste Amazon JWT from browser") },
+            label = { Text("Amazon JWT (from browser localStorage)") },
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             singleLine = true
         )
+
+        Text("Also check localStorage for amazon-music-turnstile-bypass-token",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     }
 }
 

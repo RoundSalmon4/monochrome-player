@@ -166,16 +166,18 @@ class SettingsViewModel @Inject constructor(
     fun setPiPEnabled(enabled: Boolean) = viewModelScope.launch { playerPreferences.setPiPEnabled(enabled) }
 
     fun setAmazonJwt(jwt: String) = viewModelScope.launch {
-        // JWT expiry is typically 1 hour from issue. Decode the JWT to get exp claim.
         val expiry = try {
             val parts = jwt.split(".")
-            val padded = parts[1] + "==".repeat((4 - parts[1].length % 4) % 4)
-            val json = String(android.util.Base64.decode(padded, android.util.Base64.DEFAULT))
+            val json = String(android.util.Base64.decode(parts[1].padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, '='), android.util.Base64.DEFAULT))
             val exp = com.google.gson.Gson().fromJson(json, Map::class.java)["exp"]
             (exp as? Number)?.toLong()?.times(1000L) ?: 0L
         } catch (_: Exception) { 0L }
         playerPreferences.setAmazonJwt(jwt, expiry)
         amazonMusicClient.setJwt(jwt, expiry)
+    }
+
+    fun setAmazonBypassToken(token: String) = viewModelScope.launch {
+        amazonMusicClient.setBypassToken(token)
     }
 
     fun showClearHistoryDialog() { _showClearHistoryDialog.value = true }
