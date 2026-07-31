@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
+import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import com.roundsalmon4.monochrome.core.datastore.PreferencesUiState
 import com.roundsalmon4.monochrome.player.PlayerEngineController
@@ -44,10 +45,17 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var amazonMusicClient: AmazonMusicClient
 
+    @Inject
+    lateinit var monochromeSessionRefresher: MonochromeSessionRefresher
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
+        monochromeSessionRefresher.startAutoRefresh()
+        lifecycleScope.launch {
+            monochromeSessionRefresher.getValidToken()
+        }
         lifecycleScope.launch {
             val saved = playerPreferences.getAmazonJwt()
             if (saved != null && System.currentTimeMillis() < saved.second) {

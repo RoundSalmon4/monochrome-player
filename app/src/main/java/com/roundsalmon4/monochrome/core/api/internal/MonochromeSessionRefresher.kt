@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.MediaType.Companion.toMediaType
@@ -62,13 +64,14 @@ class MonochromeSessionRefresher @Inject constructor(
 
     private val gson = Gson()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val refreshMutex = Mutex()
     private val _status = MutableStateFlow<MonochromeSessionStatus>(MonochromeSessionStatus.Unknown)
     val status: StateFlow<MonochromeSessionStatus> = _status.asStateFlow()
     private var autoRefreshStarted = false
 
-    /** Returns a usable session token, attempting a silent refresh if the stored one is close to expiry. */
+    /** Returns a usable session token, obtaining or refreshing one silently if the stored one is missing or close to expiry. */
     suspend fun getValidToken(): String? {
-        val (jwt, expiry) = prefs.getMonochromeJwt() ?: return null
+        val (jwt, expiry) = prefs.getMonochromeJwt() ?: return refresh()
         if (jwt.isNotBlank() && expiry > System.currentTimeMillis() + 60_000L) {
             _status.value = MonochromeSessionStatus.Valid
             return jwt
@@ -85,8 +88,8 @@ class MonochromeSessionRefresher @Inject constructor(
                 val (jwt, expiry) = prefs.getMonochromeJwt() ?: Pair("", 0L)
                 if (jwt.isNotBlank() && expiry > System.currentTimeMillis() + REFRESH_BUFFER_MS) {
                     _status.value = MonochromeSessionStatus.Valid
-                } else if (jwt.isNotBlank()) {
-                    Log.i(TAG, "Session expiring soon, refreshing")
+                } else {
+                    Log.i(TAG, "No valid session, refreshing")
                     refresh()
                 }
                 delay(CHECK_INTERVAL_MS)
@@ -94,10 +97,15 @@ class MonochromeSessionRefresher @Inject constructor(
         }
     }
 
-    /** Force a fresh session exchange through the Turnstile WebView flow. */
-    suspend fun refresh(): String? {
+    /** Force a fresh session exchange through the Turnstile WebView flow. Safe to call concurrently. */
+    suspend fun refresh(): String? = refreshMutex.withLock {
         _status.value = MonochromeSessionStatus.Refreshing()
-        return try {
+        try {
+            val (cachedJwt, cachedExpiry) = prefs.getMonochromeJwt() ?: Pair("", 0L)
+            if (cachedJwt.isNotBlank() && cachedExpiry > System.currentTimeMillis() + REFRESH_BUFFER_MS) {
+                _status.value = MonochromeSessionStatus.Valid
+                return cachedJwt
+            }
             val turnstileToken = withTimeout(TURNSTILE_TIMEOUT_MS) { runTurnstile() }
             if (turnstileToken == null) {
                 _status.value = MonochromeSessionStatus.Failed("Turnstile challenge failed")

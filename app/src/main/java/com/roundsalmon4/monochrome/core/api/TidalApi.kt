@@ -1,4 +1,4 @@
-package com.roundsalmon4.monochrome.core.api
+﻿package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -7,6 +7,7 @@ import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
@@ -55,6 +56,13 @@ class TidalApi @Inject constructor(
         }
         throw errors.last()
     }
+
+    // Streaming proxies can hang; use short timeouts so fallbacks fail fast
+    private val proxyClient: OkHttpClient = okHttpClient.newBuilder()
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     suspend fun search(query: String): SearchResults {
         val tracks = tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
@@ -135,7 +143,7 @@ class TidalApi @Inject constructor(
         }
         // 3. Amazon Music: last resort
         try {
-            val url = getAmazonStreamUrl(track.id)
+            val url = withTimeout(12_000L) { getAmazonStreamUrl(track.id) }
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
         throw RuntimeException("All audio sources failed for track ${track.id}")
@@ -148,7 +156,7 @@ class TidalApi @Inject constructor(
         android.util.Log.d("ChromePlayer", "Qobuz: searching ISRC=$isrc at $baseUrl")
         val searchUrl = "$baseUrl/api/get-music?q=${java.net.URLEncoder.encode(isrc, "UTF-8")}&offset=0"
         val searchResp = withContext(Dispatchers.IO) {
-            okHttpClient.newCall(okhttp3.Request.Builder().url(searchUrl).build()).execute()
+            proxyClient.newCall(okhttp3.Request.Builder().url(searchUrl).build()).execute()
         }
         android.util.Log.d("ChromePlayer", "Qobuz search: HTTP ${searchResp.code}")
         if (!searchResp.isSuccessful) {
@@ -178,7 +186,7 @@ class TidalApi @Inject constructor(
         android.util.Log.d("ChromePlayer", "Qobuz: found track $qobuzTrackId")
         val quality = "27" // HI_RES_LOSSLESS
         val streamResp = withContext(Dispatchers.IO) {
-            okHttpClient.newCall(
+            proxyClient.newCall(
                 okhttp3.Request.Builder().url("$baseUrl/api/download-music?track_id=$qobuzTrackId&quality=$quality").build()
             ).execute()
         }
@@ -276,7 +284,7 @@ class TidalApi @Inject constructor(
         android.util.Log.d("ChromePlayer", "Deezer: trying $url")
         try {
             val req = okhttp3.Request.Builder().url(url).head().build()
-            val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
+            val resp = withContext(Dispatchers.IO) { proxyClient.newCall(req).execute() }
             android.util.Log.d("ChromePlayer", "Deezer: HTTP ${resp.code}")
             if (resp.isSuccessful || resp.code == 405 || resp.code == 501) return url
             android.util.Log.w("ChromePlayer", "Deezer: returned ${resp.code}")
