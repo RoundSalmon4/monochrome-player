@@ -222,7 +222,7 @@ class SettingsViewModel @Inject constructor(
 
     fun clearCache() = viewModelScope.launch(Dispatchers.IO) {
         runCatching { context.cacheDir.deleteRecursively() }
-        runCatching { coil3.imageLoader(context).memoryCache?.clear() }
+        runCatching { coil3.SingletonImageLoader.get(context).memoryCache?.clear() }
     }
 
     fun clearPlaylists() = viewModelScope.launch {
