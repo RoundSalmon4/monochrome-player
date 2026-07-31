@@ -58,6 +58,8 @@ class SearchViewModel @Inject constructor(
                 albums = results.albums.take(10),
                 artists = results.artists.take(10)
             )
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
                 Log.e("ChromePlayer", "Search failed for query=$query", e)
                 _uiState.value = _uiState.value.copy(

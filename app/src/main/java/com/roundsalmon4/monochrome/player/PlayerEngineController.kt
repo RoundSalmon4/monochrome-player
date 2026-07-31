@@ -2,12 +2,15 @@ package com.roundsalmon4.monochrome.player
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
@@ -23,8 +26,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
-class PlayerEngineController(context: Context) {
+class PlayerEngineController(context: Context, mediaHttpClient: OkHttpClient) {
 
     companion object {
         private const val POSITION_TICK_INTERVAL_MS = 500L
@@ -38,6 +42,7 @@ class PlayerEngineController(context: Context) {
 
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
         .setLoadControl(loadControl)
+        .setDataSourceFactory(OkHttpDataSource.Factory(mediaHttpClient))
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -55,6 +60,7 @@ class PlayerEngineController(context: Context) {
     val trackEnded: SharedFlow<Unit> = _trackEnded.asSharedFlow()
 
     private var prevPlaybackState = Player.STATE_IDLE
+    private var playbackError: String? = null
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) { updateSnapshot() }
@@ -66,6 +72,11 @@ class PlayerEngineController(context: Context) {
             updateSnapshot()
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { updateSnapshot() }
+        override fun onPlayerError(error: PlaybackException) {
+            playbackError = error.message ?: "Playback error"
+            Log.w("ChromePlayer", "Playback error: $playbackError")
+            updateSnapshot()
+        }
     }
 
     init {
@@ -94,6 +105,7 @@ class PlayerEngineController(context: Context) {
         album: String = "",
         artworkUrl: String = ""
     ) {
+        playbackError = null
         val builder = MediaItem.Builder().setUri(url)
         mimeType?.let { builder.setMimeType(it) }
         val metadataBuilder = MediaMetadata.Builder()
@@ -153,7 +165,8 @@ class PlayerEngineController(context: Context) {
             playbackSpeed = exoPlayer.playbackParameters.speed,
             isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING,
             isLive = exoPlayer.isCurrentMediaItemLive,
-            playbackState = exoPlayer.playbackState
+            playbackState = exoPlayer.playbackState,
+            error = playbackError
         )
         if (newSnapshot != _playbackState.value) {
             _playbackState.value = newSnapshot

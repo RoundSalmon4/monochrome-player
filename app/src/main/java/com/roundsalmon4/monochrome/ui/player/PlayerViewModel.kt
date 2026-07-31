@@ -70,7 +70,8 @@ class PlayerViewModel @Inject constructor(
                     currentPosition = snap.currentPosition,
                     duration = snap.duration,
                     bufferedPosition = snap.bufferedPosition,
-                    playbackSpeed = snap.playbackSpeed
+                    playbackSpeed = snap.playbackSpeed,
+                    error = snap.error ?: _uiState.value.error
                 )
                 playerStateManager.updatePlaybackState(snap.isPlaying, snap.currentPosition, snap.duration, snap.bufferedPosition)
 
