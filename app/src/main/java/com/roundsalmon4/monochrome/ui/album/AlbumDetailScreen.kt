@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -88,6 +91,22 @@ fun AlbumDetailScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Text("${state.tracks.size} tracks", style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Button(
+                                onClick = { if (state.tracks.isNotEmpty()) onTrackClick(state.tracks, 0) },
+                                enabled = state.tracks.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Text("Play", modifier = Modifier.padding(start = 4.dp))
+                            }
+                            Button(
+                                onClick = { if (state.tracks.isNotEmpty()) onTrackClick(state.tracks.shuffled(), 0) },
+                                enabled = state.tracks.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.Shuffle, contentDescription = null)
+                                Text("Shuffle", modifier = Modifier.padding(start = 4.dp))
                             }
                         }
                     }

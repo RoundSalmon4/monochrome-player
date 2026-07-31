@@ -14,6 +14,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -68,6 +71,27 @@ fun PlaylistDetailScreen(
             }
             else -> {
                 LazyColumn(contentPadding = PaddingValues(bottom = 80.dp)) {
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Button(
+                                onClick = { onTrackClick(state.trackModels, 0) },
+                                enabled = state.trackModels.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Text("Play", modifier = Modifier.padding(start = 4.dp))
+                            }
+                            Button(
+                                onClick = { onTrackClick(state.trackModels.shuffled(), 0) },
+                                enabled = state.trackModels.isNotEmpty()
+                            ) {
+                                Icon(Icons.Default.Shuffle, contentDescription = null)
+                                Text("Shuffle", modifier = Modifier.padding(start = 4.dp))
+                            }
+                        }
+                    }
                     itemsIndexed(state.tracks, key = { _, t -> t.trackId }) { index, track ->
                         HorizontalDivider()
                         Row(

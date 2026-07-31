@@ -7,13 +7,25 @@ import retrofit2.http.Query
 interface TidalApiService {
 
     @GET("search/")
-    suspend fun searchTracks(@Query("s") query: String): ApiResponse<SearchData>
+    suspend fun searchTracks(
+        @Query("s") query: String,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 25
+    ): ApiResponse<SearchData>
 
     @GET("search/")
-    suspend fun searchArtists(@Query("a") query: String): ApiResponse<SearchData>
+    suspend fun searchArtists(
+        @Query("a") query: String,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 25
+    ): ApiResponse<SearchData>
 
     @GET("search/")
-    suspend fun searchAlbums(@Query("al") query: String): ApiResponse<SearchData>
+    suspend fun searchAlbums(
+        @Query("al") query: String,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 25
+    ): ApiResponse<SearchData>
 
     @GET("album/")
     suspend fun getAlbum(@Query("id") albumId: String): ApiResponse<AlbumResponseData>

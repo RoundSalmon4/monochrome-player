@@ -75,6 +75,18 @@ class TidalApi @Inject constructor(
         return tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
+    suspend fun searchTracks(query: String, offset: Int): List<Track> {
+        return tryInstances { it.searchTracks(query, offset) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
+    }
+
+    suspend fun searchArtists(query: String, offset: Int): List<Artist> {
+        return tryInstances { it.searchArtists(query, offset) }.data?.artists?.items.orEmpty().map { it.toArtist() }
+    }
+
+    suspend fun searchAlbums(query: String, offset: Int): List<Album> {
+        return tryInstances { it.searchAlbums(query, offset) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
+    }
+
     suspend fun searchArtists(query: String): List<Artist> {
         return tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
     }

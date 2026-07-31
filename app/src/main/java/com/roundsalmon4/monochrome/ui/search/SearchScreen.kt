@@ -18,6 +18,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -87,6 +88,11 @@ fun SearchScreen(
                                 modifier = Modifier.clickable { onArtistClick(artist.id) }
                             )
                         }
+                        item {
+                            TextButton(onClick = { viewModel.loadMore(SearchSection.ARTISTS) }) {
+                                Text("Show more artists")
+                            }
+                        }
                     }
                     if (state.albums.isNotEmpty()) {
                         item { Text("Albums", style = MaterialTheme.typography.titleSmall,
@@ -102,6 +108,11 @@ fun SearchScreen(
                                 modifier = Modifier.clickable { onAlbumClick(album.id) }
                             )
                         }
+                        item {
+                            TextButton(onClick = { viewModel.loadMore(SearchSection.ALBUMS) }) {
+                                Text("Show more albums")
+                            }
+                        }
                     }
                     if (state.tracks.isNotEmpty()) {
                         item { Text("Tracks", style = MaterialTheme.typography.titleSmall,
@@ -112,6 +123,11 @@ fun SearchScreen(
                                 supportingContent = { Text(track.artistName) },
                                 modifier = Modifier.clickable { onTrackClick(state.tracks, state.tracks.indexOf(track)) }
                             )
+                        }
+                        item {
+                            TextButton(onClick = { viewModel.loadMore(SearchSection.TRACKS) }) {
+                                Text(if (state.isLoadingMore) "Loading..." else "Show more tracks")
+                            }
                         }
                     }
                 }
