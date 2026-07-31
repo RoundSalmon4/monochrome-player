@@ -13,6 +13,7 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,7 +43,10 @@ class PlayerEngineController(context: Context, mediaHttpClient: OkHttpClient) {
 
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(context)
         .setLoadControl(loadControl)
-        .setDataSourceFactory(OkHttpDataSource.Factory(mediaHttpClient))
+        .setMediaSourceFactory(
+            DefaultMediaSourceFactory(context)
+                .setDataSourceFactory(OkHttpDataSource.Factory(mediaHttpClient))
+        )
         .setAudioAttributes(
             AudioAttributes.Builder()
                 .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
