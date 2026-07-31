@@ -29,7 +29,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
-class PlayerEngineController(context: Context, mediaHttpClient: OkHttpClient) {
+class PlayerEngineController(
+    context: Context,
+    mediaHttpClient: OkHttpClient
+) {
 
     companion object {
         private const val POSITION_TICK_INTERVAL_MS = 500L

@@ -11,6 +11,7 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -19,6 +20,7 @@ object PlayerModule {
 
     @Provides
     @Singleton
+    @Named("media.okhttp")
     fun provideMediaOkHttpClient(): OkHttpClient {
         val userAgent = Interceptor { chain ->
             val request = chain.request().newBuilder()
@@ -39,7 +41,7 @@ object PlayerModule {
     @Singleton
     fun providePlayerEngineController(
         @ApplicationContext context: Context,
-        mediaOkHttpClient: OkHttpClient
+        @Named("media.okhttp") mediaOkHttpClient: OkHttpClient
     ): PlayerEngineController {
         val controller = PlayerEngineController(context, mediaOkHttpClient)
         PlaybackService.playerController = controller
