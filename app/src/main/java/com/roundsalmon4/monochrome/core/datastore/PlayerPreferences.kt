@@ -33,6 +33,9 @@ private object Keys {
     val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
     val AMAZON_JWT = stringPreferencesKey("amazon_jwt")
     val AMAZON_JWT_EXPIRY = stringPreferencesKey("amazon_jwt_expiry")
+    val MONOCHROME_JWT = stringPreferencesKey("monochrome_jwt")
+    val MONOCHROME_JWT_EXPIRY = stringPreferencesKey("monochrome_jwt_expiry")
+    val MONOCHROME_PLAYBACK_ENABLED = booleanPreferencesKey("monochrome_playback_enabled")
 }
 
 data class PreferencesUiState(
@@ -121,4 +124,25 @@ class PlayerPreferences @Inject constructor(
         val expiry = prefs[Keys.AMAZON_JWT_EXPIRY]?.toLongOrNull() ?: 0L
         return Pair(jwt, expiry)
     }
+
+    suspend fun setMonochromeJwt(jwt: String, expiryTimestamp: Long) {
+        context.playerDataStore.edit {
+            it[Keys.MONOCHROME_JWT] = jwt
+            it[Keys.MONOCHROME_JWT_EXPIRY] = expiryTimestamp.toString()
+        }
+    }
+
+    suspend fun getMonochromeJwt(): Pair<String, Long>? {
+        val prefs = context.playerDataStore.data.first()
+        val jwt = prefs[Keys.MONOCHROME_JWT] ?: return null
+        val expiry = prefs[Keys.MONOCHROME_JWT_EXPIRY]?.toLongOrNull() ?: 0L
+        return Pair(jwt, expiry)
+    }
+
+    suspend fun setMonochromePlaybackEnabled(enabled: Boolean) {
+        context.playerDataStore.edit { it[Keys.MONOCHROME_PLAYBACK_ENABLED] = enabled }
+    }
+
+    suspend fun isMonochromePlaybackEnabled(): Boolean =
+        context.playerDataStore.data.first()[Keys.MONOCHROME_PLAYBACK_ENABLED] ?: true
 }

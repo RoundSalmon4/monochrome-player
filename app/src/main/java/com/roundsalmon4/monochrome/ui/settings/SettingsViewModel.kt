@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
+import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
+import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionStatus
 import com.roundsalmon4.monochrome.core.database.ExportData
 import com.roundsalmon4.monochrome.core.database.HistoryDao
 import com.roundsalmon4.monochrome.core.database.LocalPlaylistExport
@@ -30,6 +32,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     private val playerPreferences: PlayerPreferences,
     private val amazonMusicClient: AmazonMusicClient,
+    private val monochromeSessionRefresher: MonochromeSessionRefresher,
     private val historyDao: HistoryDao,
     private val playlistDao: PlaylistDao,
     private val subscriptionDao: SubscriptionDao
@@ -50,9 +53,19 @@ class SettingsViewModel @Inject constructor(
     private val _importResult = MutableStateFlow<String?>(null)
     val importResult: StateFlow<String?> = _importResult.asStateFlow()
 
+    private val _monochromeStatus = MutableStateFlow<MonochromeSessionStatus>(MonochromeSessionStatus.Unknown)
+    val monochromeStatus: StateFlow<MonochromeSessionStatus> = _monochromeStatus.asStateFlow()
+
+    private val _monochromeRefreshing = MutableStateFlow(false)
+    val monochromeRefreshing: StateFlow<Boolean> = _monochromeRefreshing.asStateFlow()
+
     init {
         viewModelScope.launch {
             playerPreferences.uiState.collect { _uiState.value = it }
+        }
+        monochromeSessionRefresher.startAutoRefresh()
+        viewModelScope.launch {
+            monochromeSessionRefresher.status.collect { _monochromeStatus.value = it }
         }
     }
 
@@ -178,6 +191,20 @@ class SettingsViewModel @Inject constructor(
 
     fun setAmazonBypassToken(token: String) = viewModelScope.launch {
         amazonMusicClient.setBypassToken(token)
+    }
+
+    fun refreshMonochromeSession() = viewModelScope.launch {
+        _monochromeRefreshing.value = true
+        try {
+            monochromeSessionRefresher.refresh()
+        } finally {
+            _monochromeRefreshing.value = false
+        }
+    }
+
+    fun setMonochromeJwt(jwt: String) = viewModelScope.launch {
+        if (jwt.isBlank()) return@launch
+        monochromeSessionRefresher.setManualJwt(jwt.trim())
     }
 
     fun showClearHistoryDialog() { _showClearHistoryDialog.value = true }

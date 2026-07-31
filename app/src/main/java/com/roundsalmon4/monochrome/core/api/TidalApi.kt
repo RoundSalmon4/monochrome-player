@@ -2,6 +2,8 @@ package com.roundsalmon4.monochrome.core.api
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
+import com.roundsalmon4.monochrome.core.api.internal.MonochromePlaybackClient
+import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +30,8 @@ import javax.inject.Singleton
 class TidalApi @Inject constructor(
     private val okHttpClient: OkHttpClient,
     private val amazonMusicClient: AmazonMusicClient,
+    private val monochromePlaybackClient: MonochromePlaybackClient,
+    private val monochromeSessionRefresher: MonochromeSessionRefresher,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -106,25 +110,35 @@ class TidalApi @Inject constructor(
         return response.data?.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
-    suspend fun getTrackStreamUrl(trackId: String, isrc: String = ""): StreamUrl {
+    suspend fun getTrackStreamUrl(track: Track): StreamUrl {
+        // 0. Monochrome Playback: in-house lossless source (matches upstream priority)
+        monochromeSessionRefresher.startAutoRefresh()
+        try {
+            monochromeSessionRefresher.getValidToken()
+            val result = monochromePlaybackClient.getStreamUrl(
+                title = track.title, artist = track.artistName,
+                isrc = track.isrc, durationMs = track.durationMs
+            )
+            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
         // 1. Qobuz: direct FLAC, no DRM
-        if (isrc.isNotBlank()) {
+        if (track.isrc.isNotBlank()) {
             try {
-                val url = getQobuzStreamUrl(isrc)
+                val url = getQobuzStreamUrl(track.isrc)
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
             // 2. Deezer: backup
             try {
-                val url = getDeezerStreamUrl(isrc)
+                val url = getDeezerStreamUrl(track.isrc)
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
         }
         // 3. Amazon Music: last resort
         try {
-            val url = getAmazonStreamUrl(trackId)
+            val url = getAmazonStreamUrl(track.id)
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw RuntimeException("All audio sources failed for track $trackId")
+        throw RuntimeException("All audio sources failed for track ${track.id}")
     }
 
     private val streamGson = Gson()
