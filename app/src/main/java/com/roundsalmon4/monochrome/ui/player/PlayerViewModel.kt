@@ -11,9 +11,12 @@ import com.roundsalmon4.monochrome.core.database.HistoryDao
 import com.roundsalmon4.monochrome.core.database.entity.ListenHistoryEntry
 import com.roundsalmon4.monochrome.player.PlayerEngineController
 import com.roundsalmon4.monochrome.player.PlayerStateManager
+import com.roundsalmon4.monochrome.player.RepeatMode
 import com.roundsalmon4.monochrome.player.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,7 +33,10 @@ data class PlayerUiState(
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val bufferedPosition: Long = 0L,
-    val playbackSpeed: Float = 1.0f
+    val playbackSpeed: Float = 1.0f,
+    val isShuffleEnabled: Boolean = false,
+    val repeatMode: RepeatMode = RepeatMode.OFF,
+    val sleepTimerMinutes: Int = 0
 )
 
 @HiltViewModel
@@ -47,6 +53,7 @@ class PlayerViewModel @Inject constructor(
 
     private var lastPositionSaveAt = 0L
     private var prevWasPlaying = false
+    private var sleepTimerJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -60,6 +67,16 @@ class PlayerViewModel @Inject constructor(
                 if (track != null && playerStateManager.shouldStartPlayback(track)) {
                     playTrack(track)
                 }
+            }
+        }
+        viewModelScope.launch {
+            playerStateManager.isShuffleEnabled.collect {
+                _uiState.value = _uiState.value.copy(isShuffleEnabled = it)
+            }
+        }
+        viewModelScope.launch {
+            playerStateManager.repeatMode.collect {
+                _uiState.value = _uiState.value.copy(repeatMode = it)
             }
         }
         viewModelScope.launch {
@@ -88,7 +105,13 @@ class PlayerViewModel @Inject constructor(
 
                 if (snap.playbackState == Player.STATE_ENDED) {
                     track?.let { persistPosition(it, it.durationMs) }
-                    nextTrack()
+                    if (playerStateManager.repeatMode.value == RepeatMode.ONE) {
+                        playerController.replay()
+                    } else if (!playerStateManager.nextTrack()) {
+                        playerController.stop()
+                        PlaybackService.stop(context)
+                        playerStateManager.clear()
+                    }
                 }
             }
         }
@@ -141,6 +164,11 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    fun retry() {
+        val track = _uiState.value.currentTrack ?: playerStateManager.queue.value.currentTrack ?: return
+        playTrack(track)
+    }
+
     fun togglePlayPause() {
         playerController.togglePlayPause()
     }
@@ -160,11 +188,34 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun previousTrack() {
-        playerStateManager.previousTrack()
+        if (playerController.exoPlayer.currentPosition > PREV_RESTART_THRESHOLD_MS) {
+            playerController.seekTo(0)
+        } else {
+            playerStateManager.previousTrack()
+        }
+    }
+
+    fun toggleShuffle() = playerStateManager.toggleShuffle()
+
+    fun cycleRepeatMode() = playerStateManager.cycleRepeatMode()
+
+    fun setVolume(volume: Float) = playerController.setVolume(volume)
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        _uiState.value = _uiState.value.copy(sleepTimerMinutes = minutes)
+        if (minutes <= 0) return
+        sleepTimerJob = viewModelScope.launch {
+            delay(minutes * 60_000L)
+            _uiState.value = _uiState.value.copy(sleepTimerMinutes = 0)
+            playerController.pause()
+            PlaybackService.stop(context)
+        }
     }
 
     companion object {
-        private const val POSITION_SAVE_INTERVAL_MS = 5_000L
+        private const val POSITION_SAVE_INTERVAL_MS = 2_000L
         private const val RESUME_SKIP_END_MS = 10_000L
+        private const val PREV_RESTART_THRESHOLD_MS = 3_000L
     }
 }

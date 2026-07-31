@@ -19,11 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -63,22 +60,17 @@ class PlayerEngineController(
     private val _playbackState = MutableStateFlow(PlayerPlaybackSnapshot())
     val playbackState: StateFlow<PlayerPlaybackSnapshot> = _playbackState.asStateFlow()
 
-    private val _trackEnded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val trackEnded: SharedFlow<Unit> = _trackEnded.asSharedFlow()
-
     private var prevPlaybackState = Player.STATE_IDLE
     private var playbackError: String? = null
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) { updateSnapshot() }
         override fun onPlaybackStateChanged(state: Int) {
-            if (prevPlaybackState != Player.STATE_ENDED && state == Player.STATE_ENDED) {
-                _trackEnded.tryEmit(Unit)
-            }
             prevPlaybackState = state
             updateSnapshot()
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { updateSnapshot() }
+        override fun onPositionDiscontinuity(reason: Int) { updateSnapshot() }
         override fun onPlayerError(error: PlaybackException) {
             val cause = error.cause
             val causeMsg = cause?.message?.takeIf { it.isNotBlank() }
@@ -138,8 +130,17 @@ class PlayerEngineController(
         exoPlayer.playWhenReady = true
     }
 
+    fun replay() {
+        exoPlayer.seekTo(0)
+        exoPlayer.play()
+    }
+
     fun togglePlayPause() {
         if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+    }
+
+    fun pause() {
+        exoPlayer.pause()
     }
 
     fun stop() {
@@ -162,6 +163,10 @@ class PlayerEngineController(
 
     fun setPlaybackSpeed(speed: Float) {
         exoPlayer.playbackParameters = PlaybackParameters(speed)
+    }
+
+    fun setVolume(volume: Float) {
+        exoPlayer.volume = volume.coerceIn(0f, 1f)
     }
 
     fun release() {
