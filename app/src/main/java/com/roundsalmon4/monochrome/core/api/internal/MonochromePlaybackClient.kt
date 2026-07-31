@@ -2,6 +2,7 @@ package com.roundsalmon4.monochrome.core.api.internal
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,8 +66,11 @@ class MonochromePlaybackClient @Inject constructor(
         if (resp.code == 429) { Log.w(TAG, "Monochrome Playback rate limited"); return null }
         if (!resp.isSuccessful) { Log.w(TAG, "Monochrome Playback: HTTP ${resp.code}"); return null }
 
-        val raw = resp.body?.string()?.let { runCatching { gson.fromJson<Map<String, Any?>>(it) }.getOrNull() }
-            ?: run { Log.w(TAG, "Monochrome Playback: empty/invalid response"); return null }
+        val raw = resp.body?.string()?.let {
+            runCatching {
+                gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+            }.getOrNull()
+        } ?: run { Log.w(TAG, "Monochrome Playback: empty/invalid response"); return null }
         val url = raw["url"]?.toString()?.takeIf { it.isNotBlank() } ?: run {
             Log.w(TAG, "Monochrome Playback returned no stream URL")
             return null

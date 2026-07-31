@@ -9,6 +9,7 @@ import android.util.Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -150,8 +151,11 @@ class MonochromeSessionRefresher @Inject constructor(
             Log.w(TAG, "auth/turnstile: HTTP ${resp.code}")
             return Pair(null, 0L)
         }
-        val data = resp.body?.string()?.let { runCatching { gson.fromJson<Map<String, Any?>>(it) }.getOrNull() }
-            ?: return Pair(null, 0L)
+        val data = resp.body?.string()?.let {
+            runCatching {
+                gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+            }.getOrNull()
+        } ?: return Pair(null, 0L)
         val jwt = data["access_token"]?.toString()?.takeIf { it.isNotBlank() } ?: return Pair(null, 0L)
         return Pair(jwt, jwtExpiryMillis(jwt))
     }

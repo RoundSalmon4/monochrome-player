@@ -384,11 +384,12 @@ private fun MonochromeSection(viewModel: SettingsViewModel) {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         SettingsCategory("Monochrome Playback")
 
-        val statusText = when (monochromeStatus) {
+        val status = monochromeStatus
+        val statusText = when (status) {
             is MonochromeSessionStatus.Valid -> "Session active"
             is MonochromeSessionStatus.Expired -> "Session expired"
             is MonochromeSessionStatus.Refreshing -> "Refreshing session..."
-            is MonochromeSessionStatus.Failed -> "Failed: ${monochromeStatus.error}"
+            is MonochromeSessionStatus.Failed -> "Failed: ${status.error}"
             is MonochromeSessionStatus.Unknown -> "No session yet"
         }
         ListItem(
