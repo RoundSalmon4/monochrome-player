@@ -36,6 +36,7 @@ private object Keys {
     val MONOCHROME_JWT = stringPreferencesKey("monochrome_jwt")
     val MONOCHROME_JWT_EXPIRY = stringPreferencesKey("monochrome_jwt_expiry")
     val MONOCHROME_PLAYBACK_ENABLED = booleanPreferencesKey("monochrome_playback_enabled")
+    val SAVED_QUEUE = stringPreferencesKey("saved_queue")
 }
 
 data class PreferencesUiState(
@@ -145,4 +146,13 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun isMonochromePlaybackEnabled(): Boolean =
         context.playerDataStore.data.first()[Keys.MONOCHROME_PLAYBACK_ENABLED] ?: true
+
+    suspend fun setSavedQueueJson(json: String?) {
+        context.playerDataStore.edit {
+            if (json == null) it.remove(Keys.SAVED_QUEUE) else it[Keys.SAVED_QUEUE] = json
+        }
+    }
+
+    suspend fun getSavedQueueJson(): String? =
+        context.playerDataStore.data.first()[Keys.SAVED_QUEUE]
 }

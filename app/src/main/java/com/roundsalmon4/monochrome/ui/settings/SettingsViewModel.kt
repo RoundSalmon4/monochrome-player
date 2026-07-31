@@ -1,5 +1,6 @@
 package com.roundsalmon4.monochrome.ui.settings
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,7 @@ import com.roundsalmon4.monochrome.core.database.entity.LocalPlaylist
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import com.roundsalmon4.monochrome.core.datastore.PreferencesUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val playerPreferences: PlayerPreferences,
     private val amazonMusicClient: AmazonMusicClient,
     private val monochromeSessionRefresher: MonochromeSessionRefresher,
@@ -215,6 +218,11 @@ class SettingsViewModel @Inject constructor(
     fun clearHistory() = viewModelScope.launch {
         historyDao.clearAll()
         _showClearHistoryDialog.value = false
+    }
+
+    fun clearCache() = viewModelScope.launch(Dispatchers.IO) {
+        runCatching { context.cacheDir.deleteRecursively() }
+        runCatching { coil3.imageLoader(context).memoryCache?.clear() }
     }
 
     fun clearPlaylists() = viewModelScope.launch {

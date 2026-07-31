@@ -343,9 +343,15 @@ private fun DataSection(viewModel: SettingsViewModel, exportResult: String?, imp
         )
 
         ListItem(
-            modifier = Modifier.clickable { viewModel.showClearHistoryDialog() },
+            modifier = Modifier.clickable { viewModel.clearHistory() },
             headlineContent = { Text("Clear History", fontWeight = FontWeight.SemiBold) },
             supportingContent = { Text("Remove all listening history") }
+        )
+
+        ListItem(
+            modifier = Modifier.clickable { viewModel.clearCache() },
+            headlineContent = { Text("Clear Cache", fontWeight = FontWeight.SemiBold) },
+            supportingContent = { Text("Clear image cache and temporary files") }
         )
 
         ListItem(
