@@ -25,6 +25,7 @@ object PlayerModule {
         val userAgent = Interceptor { chain ->
             val request = chain.request().newBuilder()
                 .header("User-Agent", MEDIA_USER_AGENT)
+                .header("Referer", "https://monochrome.tf/")
                 .build()
             chain.proceed(request)
         }

@@ -80,8 +80,15 @@ class PlayerEngineController(
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { updateSnapshot() }
         override fun onPlayerError(error: PlaybackException) {
-            playbackError = error.message ?: "Playback error"
-            Log.w("ChromePlayer", "Playback error: $playbackError")
+            val cause = error.cause
+            val causeMsg = cause?.message?.takeIf { it.isNotBlank() }
+            playbackError = buildString {
+                append(error.errorCodeName)
+                append(": ")
+                append(error.message ?: "Playback error")
+                if (causeMsg != null) append(" | ").append(causeMsg)
+            }
+            Log.e("ChromePlayer", "Playback error (stream=${exoPlayer.currentMediaItem?.localConfiguration?.uri})", error)
             updateSnapshot()
         }
     }
