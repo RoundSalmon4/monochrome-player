@@ -3,7 +3,6 @@ package com.roundsalmon4.monochrome.player.service
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.roundsalmon4.monochrome.MainActivity
@@ -16,11 +15,6 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        startForeground(
-            FOREGROUND_SERVICE_ID,
-            buildNotification(),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-        )
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -58,18 +52,7 @@ class PlaybackService : MediaSessionService() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification() = android.app.Notification.Builder(this, "playback")
-        .setContentTitle("ChromePlayer")
-        .setContentText("Playing music")
-        .setSmallIcon(android.R.drawable.ic_media_play)
-        .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
-        .setOngoing(true)
-        .build()
-
     companion object {
-        private const val FOREGROUND_SERVICE_ID = 1
-
         @Volatile
         var playerController: PlayerEngineController? = null
 

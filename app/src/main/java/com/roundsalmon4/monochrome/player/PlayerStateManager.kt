@@ -38,6 +38,8 @@ class PlayerStateManager @Inject constructor() {
     private val _queue = MutableStateFlow(PlaybackQueue())
     val queue: StateFlow<PlaybackQueue> = _queue.asStateFlow()
 
+    private var startedTrackId: String? = null
+
     fun setQueue(tracks: List<Track>, startIndex: Int = 0) {
         _queue.value = PlaybackQueue(tracks = tracks, currentIndex = startIndex)
     }
@@ -56,6 +58,17 @@ class PlayerStateManager @Inject constructor() {
         if (q.hasPrevious) setCurrentIndex(q.currentIndex - 1)
     }
 
+    /** Returns true when the given track should start playing (i.e. it differs from the last started track). */
+    fun shouldStartPlayback(track: Track): Boolean {
+        if (track.id == startedTrackId) return false
+        startedTrackId = track.id
+        return true
+    }
+
+    fun markPlaybackFailed(trackId: String) {
+        if (startedTrackId == trackId) startedTrackId = null
+    }
+
     fun updateTrackInfo(trackId: String, title: String, artistName: String, coverUrl: String) {
         _miniPlayerState.value = _miniPlayerState.value.copy(
             trackId = trackId, title = title, artistName = artistName, coverUrl = coverUrl
@@ -71,5 +84,6 @@ class PlayerStateManager @Inject constructor() {
     fun clear() {
         _miniPlayerState.value = MiniPlayerState()
         _queue.value = PlaybackQueue()
+        startedTrackId = null
     }
 }

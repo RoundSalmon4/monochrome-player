@@ -27,7 +27,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +48,6 @@ fun PlayerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var showSpeedSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) { viewModel.playCurrent() }
 
     if (showSpeedSheet) {
         SpeedPickerSheet(

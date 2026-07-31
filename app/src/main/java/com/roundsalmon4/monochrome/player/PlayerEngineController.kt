@@ -1,9 +1,11 @@
 package com.roundsalmon4.monochrome.player
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -12,16 +14,21 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class PlayerEngineController(context: Context) {
+
+    companion object {
+        private const val POSITION_TICK_INTERVAL_MS = 500L
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -63,13 +70,45 @@ class PlayerEngineController(context: Context) {
 
     init {
         exoPlayer.addListener(playerListener)
+        startPositionTicker()
     }
 
-    fun play(url: String, mimeType: String? = null) {
+    private fun startPositionTicker() {
+        scope.launch {
+            while (isActive) {
+                val state = exoPlayer.playbackState
+                if (state == Player.STATE_READY || state == Player.STATE_BUFFERING) {
+                    updateSnapshot()
+                }
+                delay(POSITION_TICK_INTERVAL_MS)
+            }
+        }
+    }
+
+    fun play(
+        url: String,
+        mimeType: String? = null,
+        startPositionMs: Long = 0L,
+        title: String = "",
+        artist: String = "",
+        album: String = "",
+        artworkUrl: String = ""
+    ) {
         val builder = MediaItem.Builder().setUri(url)
         mimeType?.let { builder.setMimeType(it) }
+        val metadataBuilder = MediaMetadata.Builder()
+        if (title.isNotBlank()) metadataBuilder.setTitle(title)
+        if (artist.isNotBlank()) metadataBuilder.setArtist(artist)
+        if (album.isNotBlank()) metadataBuilder.setAlbumTitle(album)
+        if (artworkUrl.isNotBlank()) {
+            runCatching { metadataBuilder.setArtworkUri(Uri.parse(artworkUrl)) }
+        }
+        builder.setMediaMetadata(metadataBuilder.build())
         exoPlayer.setMediaItem(builder.build())
         exoPlayer.prepare()
+        if (startPositionMs > 0) {
+            exoPlayer.seekTo(startPositionMs.coerceAtLeast(0))
+        }
         exoPlayer.playWhenReady = true
     }
 
@@ -106,17 +145,18 @@ class PlayerEngineController(context: Context) {
     }
 
     private fun updateSnapshot() {
-        _playbackState.update {
-            PlayerPlaybackSnapshot(
-                isPlaying = exoPlayer.isPlaying,
-                currentPosition = exoPlayer.currentPosition.coerceAtLeast(0),
-                duration = if (exoPlayer.duration > 0) exoPlayer.duration else 0L,
-                bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0),
-                playbackSpeed = exoPlayer.playbackParameters.speed,
-                isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING,
-                isLive = exoPlayer.isCurrentMediaItemLive,
-                playbackState = exoPlayer.playbackState
-            )
+        val newSnapshot = PlayerPlaybackSnapshot(
+            isPlaying = exoPlayer.isPlaying,
+            currentPosition = exoPlayer.currentPosition.coerceAtLeast(0),
+            duration = if (exoPlayer.duration > 0) exoPlayer.duration else 0L,
+            bufferedPosition = exoPlayer.bufferedPosition.coerceAtLeast(0),
+            playbackSpeed = exoPlayer.playbackParameters.speed,
+            isBuffering = exoPlayer.playbackState == Player.STATE_BUFFERING,
+            isLive = exoPlayer.isCurrentMediaItemLive,
+            playbackState = exoPlayer.playbackState
+        )
+        if (newSnapshot != _playbackState.value) {
+            _playbackState.value = newSnapshot
         }
     }
 }
