@@ -16,9 +16,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +50,7 @@ fun ArtistDetailScreen(
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val isSubscribed by viewModel.isSubscribed.collectAsStateWithLifecycle()
 
     LaunchedEffect(artistId) { viewModel.loadArtist(artistId) }
 
@@ -83,6 +87,16 @@ fun ArtistDetailScreen(
                             )
                             Text(state.artist!!.name, style = MaterialTheme.typography.headlineSmall,
                                 modifier = Modifier.padding(top = 8.dp))
+                            FilledTonalButton(onClick = { viewModel.toggleSubscription() }, modifier = Modifier.padding(top = 8.dp)) {
+                                Icon(
+                                    imageVector = if (isSubscribed) Icons.Default.PersonRemove else Icons.Default.PersonAdd,
+                                    contentDescription = null, modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = if (isSubscribed) "Subscribed" else "Subscribe",
+                                    modifier = Modifier.padding(start = 4.dp)
+                                )
+                            }
                         }
                     }
                 }

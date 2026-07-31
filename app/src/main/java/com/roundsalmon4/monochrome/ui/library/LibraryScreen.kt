@@ -54,6 +54,7 @@ import com.roundsalmon4.monochrome.ui.components.AddToPlaylistDialog
 fun LibraryScreen(
     onTrackClick: (List<Track>, Int) -> Unit,
     onPlaylistClick: (Long) -> Unit,
+    onArtistClick: (String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -127,7 +128,7 @@ fun LibraryScreen(
                 )
                 LibraryTab.ARTISTS -> ArtistsTab(
                     subscriptions = uiState.subscriptions,
-                    onArtistClick = { }
+                    onArtistClick = onArtistClick
                 )
             }
         }

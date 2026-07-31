@@ -32,7 +32,7 @@ interface TidalApiService {
     suspend fun getArtistAlbums(
         @Query("f") artistId: String,
         @Query("skip_tracks") skipTracks: Boolean = true
-    ): ApiResponse<SearchData>
+    ): ArtistAlbumsResponse
 
     @GET("track/")
     suspend fun getTrack(@Query("id") trackId: String): ApiResponse<TrackResponseData>

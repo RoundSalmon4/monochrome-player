@@ -5,6 +5,11 @@ data class ApiResponse<T>(
     val data: T? = null
 )
 
+data class ArtistAlbumsResponse(
+    val version: String? = null,
+    val albums: PaginatedItems<AlbumItem>? = null
+)
+
 data class SearchData(
     val tracks: PaginatedItems<TrackItem>? = null,
     val artists: PaginatedItems<ArtistItem>? = null,

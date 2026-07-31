@@ -115,7 +115,7 @@ class TidalApi @Inject constructor(
 
     suspend fun getArtistAlbums(artistId: String): List<Album> {
         val response = tryInstances { it.getArtistAlbums(artistId) }
-        return response.data?.albums?.items.orEmpty().map { it.toAlbum() }
+        return response.albums?.items.orEmpty().map { it.toAlbum() }
     }
 
     suspend fun getTrackStreamUrl(track: Track): StreamUrl {

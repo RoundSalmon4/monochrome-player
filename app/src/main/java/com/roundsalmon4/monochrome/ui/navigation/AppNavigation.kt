@@ -176,7 +176,8 @@ fun AppNavigation(
                 composable<Route.Library> {
                     LibraryScreen(
                         onTrackClick = { tracks, index -> playTracks(tracks, index) },
-                        onPlaylistClick = { navController.navigate(Route.PlaylistDetail(it)) }
+                        onPlaylistClick = { navController.navigate(Route.PlaylistDetail(it)) },
+                        onArtistClick = { navController.navigate(Route.Artist(it)) }
                     )
                 }
 

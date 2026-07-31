@@ -46,4 +46,15 @@ class PlaylistDetailViewModel @Inject constructor(
             }
         }
     }
+
+    fun removeTrack(playlistId: Long, trackId: String) {
+        viewModelScope.launch {
+            playlistDao.removeTrack(playlistId, trackId)
+            val count = playlistDao.getTrackCount(playlistId)
+            val playlist = playlistDao.getPlaylistById(playlistId)
+            if (playlist != null) {
+                playlistDao.updatePlaylist(playlist.copy(trackCount = count))
+            }
+        }
+    }
 }
