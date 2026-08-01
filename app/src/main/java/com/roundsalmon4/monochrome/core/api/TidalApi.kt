@@ -158,7 +158,12 @@ class TidalApi @Inject constructor(
             val url = withTimeout(12_000L) { getAmazonStreamUrl(track.id) }
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw RuntimeException("All audio sources failed for track ${track.id}")
+        throw RuntimeException(
+            if (monochromePlaybackClient.wasNotFound)
+                "Track unavailable on Monochrome and fallback sources are offline: ${track.title} - ${track.artistName}"
+            else
+                "All audio sources failed for track ${track.id}"
+        )
     }
 
     private val streamGson = Gson()

@@ -32,12 +32,16 @@ class MonochromePlaybackClient @Inject constructor(
 
     private val gson = Gson()
 
+    @Volatile
+    var wasNotFound: Boolean = false
+
     suspend fun getStreamUrl(
         title: String,
         artist: String,
         isrc: String = "",
         durationMs: Long = 0L
     ): MonochromeStreamResult? {
+        wasNotFound = false
         val (jwt, expiry) = prefs.getMonochromeJwt() ?: run {
             Log.w(TAG, "No Monochrome Playback session stored")
             return null
@@ -64,6 +68,11 @@ class MonochromePlaybackClient @Inject constructor(
         val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
         if (resp.code == 401) { Log.w(TAG, "Monochrome Playback session rejected"); return null }
         if (resp.code == 429) { Log.w(TAG, "Monochrome Playback rate limited"); return null }
+        if (resp.code == 404) {
+            wasNotFound = true
+            Log.w(TAG, "Monochrome Playback: track not in catalog")
+            return null
+        }
         if (!resp.isSuccessful) { Log.w(TAG, "Monochrome Playback: HTTP ${resp.code}"); return null }
 
         val raw = resp.body?.string()?.let {
