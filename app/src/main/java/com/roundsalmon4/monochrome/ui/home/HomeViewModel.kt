@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class HomeUiState(
-    val isLoading: Boolean = true,
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
     val newReleases: List<Album> = emptyList(),
     val error: String? = null
 )
@@ -26,23 +27,27 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    init {
-        loadNewReleases()
-    }
-
-    private fun loadNewReleases() {
+    /** Reloads new releases. Shows a full-screen spinner when there's no data yet, otherwise a pull-to-refresh indicator. */
+    fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val hasData = _uiState.value.newReleases.isNotEmpty()
+            _uiState.value = _uiState.value.copy(
+                isLoading = !hasData,
+                isRefreshing = hasData,
+                error = null
+            )
             try {
                 val results = tidalApi.searchAlbums("new")
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     newReleases = results.take(50)
                 )
             } catch (e: Exception) {
-                Log.e("ChromePlayer", "Home loadNewReleases failed", e)
+                Log.e("ChromePlayer", "Home refresh failed", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    isRefreshing = false,
                     error = e.message ?: "Failed to load"
                 )
             }
