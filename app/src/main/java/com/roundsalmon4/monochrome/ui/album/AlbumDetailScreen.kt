@@ -44,6 +44,7 @@ fun AlbumDetailScreen(
     albumId: String,
     onBackClick: () -> Unit,
     onTrackClick: (List<Track>, Int) -> Unit,
+    onShuffleClick: (List<Track>) -> Unit,
     viewModel: AlbumDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -102,7 +103,7 @@ fun AlbumDetailScreen(
                                 Text("Play", modifier = Modifier.padding(start = 4.dp))
                             }
                             Button(
-                                onClick = { if (state.tracks.isNotEmpty()) onTrackClick(state.tracks.shuffled(), 0) },
+                                onClick = { if (state.tracks.isNotEmpty()) onShuffleClick(state.tracks) },
                                 enabled = state.tracks.isNotEmpty()
                             ) {
                                 Icon(Icons.Default.Shuffle, contentDescription = null)

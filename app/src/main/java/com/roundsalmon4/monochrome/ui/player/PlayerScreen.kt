@@ -202,7 +202,7 @@ fun PlayerScreen(
                         }
                     }
 
-                    VolumeRow(viewModel)
+                    VolumeRow(volume = state.volume, viewModel)
                 }
             }
             else -> {
@@ -240,8 +240,8 @@ private fun ProgressSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
 }
 
 @Composable
-private fun VolumeRow(viewModel: PlayerViewModel) {
-    var volume by remember { mutableStateOf(1f) }
+private fun VolumeRow(volume: Float, viewModel: PlayerViewModel) {
+    var localVolume by remember { mutableStateOf(volume) }
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -249,8 +249,8 @@ private fun VolumeRow(viewModel: PlayerViewModel) {
         Icon(Icons.Default.VolumeDown, contentDescription = "Volume down",
             modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Slider(
-            value = volume,
-            onValueChange = { volume = it; viewModel.setVolume(it) },
+            value = localVolume,
+            onValueChange = { localVolume = it; viewModel.setVolume(it) },
             modifier = Modifier.weight(1f)
         )
         Icon(Icons.Default.VolumeUp, contentDescription = "Volume up",

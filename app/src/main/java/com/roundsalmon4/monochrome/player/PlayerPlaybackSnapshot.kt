@@ -11,7 +11,5 @@ data class PlayerPlaybackSnapshot(
     val isBuffering: Boolean = false,
     val isLive: Boolean = false,
     val playbackState: Int = Player.STATE_IDLE,
-    val currentQualityLabel: String = "",
-    val selectedAudioTrackIndex: Int = -1,
     val error: String? = null
 )

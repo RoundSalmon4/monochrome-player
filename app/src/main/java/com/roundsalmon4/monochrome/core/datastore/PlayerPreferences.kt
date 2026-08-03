@@ -37,6 +37,7 @@ private object Keys {
     val MONOCHROME_JWT_EXPIRY = stringPreferencesKey("monochrome_jwt_expiry")
     val MONOCHROME_PLAYBACK_ENABLED = booleanPreferencesKey("monochrome_playback_enabled")
     val SAVED_QUEUE = stringPreferencesKey("saved_queue")
+    val VOLUME = floatPreferencesKey("volume")
 }
 
 data class PreferencesUiState(
@@ -49,7 +50,8 @@ data class PreferencesUiState(
     val primaryColor: Int = 0xFFFF0000.toInt(),
     val secondaryColor: Int = 0xFF282828.toInt(),
     val colorSchemeMode: String = "STANDARD",
-    val pipEnabled: Boolean = true
+    val pipEnabled: Boolean = true,
+    val volume: Float = 1.0f
 )
 
 @Singleton
@@ -68,8 +70,13 @@ class PlayerPreferences @Inject constructor(
             primaryColor = prefs[Keys.PRIMARY_COLOR] ?: 0xFFFF0000.toInt(),
             secondaryColor = prefs[Keys.SECONDARY_COLOR] ?: 0xFF282828.toInt(),
             colorSchemeMode = prefs[Keys.COLOR_SCHEME_MODE] ?: "STANDARD",
-            pipEnabled = prefs[Keys.PIP_ENABLED] ?: true
+            pipEnabled = prefs[Keys.PIP_ENABLED] ?: true,
+            volume = prefs[Keys.VOLUME] ?: 1.0f
         )
+    }
+
+    suspend fun setVolume(volume: Float) {
+        context.playerDataStore.edit { it[Keys.VOLUME] = volume }
     }
 
     suspend fun setPlaybackSpeed(speed: Float) {

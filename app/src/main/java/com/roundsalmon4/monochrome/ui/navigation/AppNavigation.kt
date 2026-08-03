@@ -87,6 +87,15 @@ fun AppNavigation(
         }
     }
 
+    val playShuffled: (List<Track>) -> Unit = { tracks ->
+        playerStateManager.setQueue(tracks, 0)
+        playerStateManager.toggleShuffle()
+        navController.navigate(Route.Player) {
+            popUpTo(Route.Home) { saveState = true }
+            launchSingleTop = true
+        }
+    }
+
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
@@ -160,7 +169,8 @@ fun AppNavigation(
                     AlbumDetailScreen(
                         albumId = route.albumId,
                         onBackClick = { navController.popBackStack() },
-                        onTrackClick = playTracks
+                        onTrackClick = playTracks,
+                        onShuffleClick = playShuffled
                     )
                 }
 
@@ -192,6 +202,7 @@ fun AppNavigation(
                                 launchSingleTop = true
                             }
                         },
+                        onShuffleClick = playShuffled,
                         onBackClick = { navController.popBackStack() }
                     )
                 }

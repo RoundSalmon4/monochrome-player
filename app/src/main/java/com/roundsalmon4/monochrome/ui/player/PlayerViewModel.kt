@@ -9,6 +9,7 @@ import com.roundsalmon4.monochrome.core.api.TidalApi
 import com.roundsalmon4.monochrome.core.api.model.Track
 import com.roundsalmon4.monochrome.core.database.HistoryDao
 import com.roundsalmon4.monochrome.core.database.entity.ListenHistoryEntry
+import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import com.roundsalmon4.monochrome.player.PlayerEngineController
 import com.roundsalmon4.monochrome.player.PlayerStateManager
 import com.roundsalmon4.monochrome.player.RepeatMode
@@ -20,6 +21,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,6 +36,7 @@ data class PlayerUiState(
     val duration: Long = 0L,
     val bufferedPosition: Long = 0L,
     val playbackSpeed: Float = 1.0f,
+    val volume: Float = 1.0f,
     val isShuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
     val sleepTimerMinutes: Int = 0
@@ -45,7 +48,8 @@ class PlayerViewModel @Inject constructor(
     private val tidalApi: TidalApi,
     private val historyDao: HistoryDao,
     private val playerController: PlayerEngineController,
-    private val playerStateManager: PlayerStateManager
+    private val playerStateManager: PlayerStateManager,
+    private val playerPreferences: PlayerPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -56,6 +60,11 @@ class PlayerViewModel @Inject constructor(
     private var sleepTimerJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            val prefs = playerPreferences.uiState.first()
+            playerController.setVolume(prefs.volume)
+            _uiState.value = _uiState.value.copy(volume = prefs.volume)
+        }
         viewModelScope.launch {
             playerStateManager.queue.collect { queue ->
                 val track = queue.currentTrack
@@ -184,7 +193,11 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun nextTrack() {
-        playerStateManager.nextTrack()
+        if (!playerStateManager.nextTrack()) {
+            playerController.stop()
+            PlaybackService.stop(context)
+            playerStateManager.clear()
+        }
     }
 
     fun previousTrack() {
@@ -199,7 +212,11 @@ class PlayerViewModel @Inject constructor(
 
     fun cycleRepeatMode() = playerStateManager.cycleRepeatMode()
 
-    fun setVolume(volume: Float) = playerController.setVolume(volume)
+    fun setVolume(volume: Float) {
+        playerController.setVolume(volume)
+        _uiState.value = _uiState.value.copy(volume = volume)
+        viewModelScope.launch { playerPreferences.setVolume(volume) }
+    }
 
     fun setSleepTimer(minutes: Int) {
         sleepTimerJob?.cancel()

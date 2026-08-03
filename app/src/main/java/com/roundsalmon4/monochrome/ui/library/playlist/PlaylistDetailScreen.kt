@@ -41,6 +41,7 @@ import com.roundsalmon4.monochrome.core.api.model.Track
 fun PlaylistDetailScreen(
     playlistId: Long,
     onTrackClick: (List<Track>, Int) -> Unit,
+    onShuffleClick: (List<Track>) -> Unit,
     onBackClick: () -> Unit,
     viewModel: PlaylistDetailViewModel = hiltViewModel()
 ) {
@@ -84,7 +85,7 @@ fun PlaylistDetailScreen(
                                 Text("Play", modifier = Modifier.padding(start = 4.dp))
                             }
                             Button(
-                                onClick = { onTrackClick(state.trackModels.shuffled(), 0) },
+                                onClick = { onShuffleClick(state.trackModels) },
                                 enabled = state.trackModels.isNotEmpty()
                             ) {
                                 Icon(Icons.Default.Shuffle, contentDescription = null)
