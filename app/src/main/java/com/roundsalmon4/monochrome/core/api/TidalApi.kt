@@ -5,6 +5,7 @@ import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.MonochromePlaybackClient
 import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
+import com.roundsalmon4.monochrome.core.api.internal.UnifiedPlaybackClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -33,6 +34,7 @@ class TidalApi @Inject constructor(
     private val amazonMusicClient: AmazonMusicClient,
     private val monochromePlaybackClient: MonochromePlaybackClient,
     private val monochromeSessionRefresher: MonochromeSessionRefresher,
+    private val unifiedPlaybackClient: UnifiedPlaybackClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -131,7 +133,7 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(track: Track): StreamUrl {
-        // 0. Monochrome Playback: in-house lossless source (matches upstream priority)
+        // 0. Monochrome Playback: in-house lossless source
         monochromeSessionRefresher.startAutoRefresh()
         try {
             monochromeSessionRefresher.getValidToken()
@@ -141,6 +143,14 @@ class TidalApi @Inject constructor(
             )
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
+        // 0b. Unified Playback (music-api.geeked.wtf): consolidated Amazon/Monochrome/Qobuz source
+        try {
+            val result = unifiedPlaybackClient.getStreamUrl(
+                title = track.title, artist = track.artistName,
+                isrc = track.isrc, durationMs = track.durationMs
+            )
+            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Unified Playback failed: ${e.message}") }
         // 1. Qobuz: direct FLAC, no DRM
         if (track.isrc.isNotBlank()) {
             try {

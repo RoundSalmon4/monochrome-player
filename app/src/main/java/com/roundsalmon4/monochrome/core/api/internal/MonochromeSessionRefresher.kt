@@ -127,6 +127,10 @@ class MonochromeSessionRefresher @Inject constructor(
         }
     }
 
+    /** Runs the WebView Turnstile challenge and returns the raw token (used by other providers too). */
+    suspend fun obtainTurnstileToken(): String? =
+        withTimeout(TURNSTILE_TIMEOUT_MS) { runTurnstile() }
+
     suspend fun setManualJwt(jwt: String) {
         prefs.setMonochromeJwt(jwt, jwtExpiryMillis(jwt))
         _status.value = MonochromeSessionStatus.Valid

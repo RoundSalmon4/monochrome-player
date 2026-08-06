@@ -38,6 +38,8 @@ private object Keys {
     val MONOCHROME_PLAYBACK_ENABLED = booleanPreferencesKey("monochrome_playback_enabled")
     val SAVED_QUEUE = stringPreferencesKey("saved_queue")
     val VOLUME = floatPreferencesKey("volume")
+    val UNIFIED_JWT = stringPreferencesKey("unified_jwt")
+    val UNIFIED_JWT_EXPIRY = stringPreferencesKey("unified_jwt_expiry")
 }
 
 data class PreferencesUiState(
@@ -162,4 +164,18 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun getSavedQueueJson(): String? =
         context.playerDataStore.data.first()[Keys.SAVED_QUEUE]
+
+    suspend fun setUnifiedJwt(jwt: String, expiryTimestamp: Long) {
+        context.playerDataStore.edit {
+            it[Keys.UNIFIED_JWT] = jwt
+            it[Keys.UNIFIED_JWT_EXPIRY] = expiryTimestamp.toString()
+        }
+    }
+
+    suspend fun getUnifiedJwt(): Pair<String, Long>? {
+        val prefs = context.playerDataStore.data.first()
+        val jwt = prefs[Keys.UNIFIED_JWT] ?: return null
+        val expiry = prefs[Keys.UNIFIED_JWT_EXPIRY]?.toLongOrNull() ?: 0L
+        return Pair(jwt, expiry)
+    }
 }
