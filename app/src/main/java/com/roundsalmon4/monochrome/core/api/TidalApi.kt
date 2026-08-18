@@ -142,10 +142,12 @@ class TidalApi @Inject constructor(
         monochromeSessionRefresher.startAutoRefresh()
         try {
             monochromeSessionRefresher.getValidToken()
-            val result = monochromePlaybackClient.getStreamUrl(
-                title = track.title, artist = track.artistName,
-                isrc = track.isrc, durationMs = track.durationMs
-            )
+            val result = withTimeout(remaining()) {
+                monochromePlaybackClient.getStreamUrl(
+                    title = track.title, artist = track.artistName,
+                    isrc = track.isrc, durationMs = track.durationMs
+                )
+            }
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track) }

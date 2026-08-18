@@ -2,14 +2,9 @@ package com.roundsalmon4.monochrome.ui.player
 
 import android.util.Log
 import android.util.LruCache
-import android.util.Range
-import android.util.Rational
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.RandomAccessFile
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -43,10 +38,8 @@ class WaveformDecoder @Inject constructor() {
     }
 
     private fun decodeFromUrl(url: String): FloatArray? {
+        val tempFile = File.createTempFile("waveform", ".tmp")
         try {
-            val tempFile = File.createTempFile("waveform", ".tmp")
-            tempFile.deleteOnExit()
-
             val conn = java.net.URL(url).openConnection().apply {
                 connectTimeout = 15_000
                 readTimeout = 15_000
@@ -68,102 +61,98 @@ class WaveformDecoder @Inject constructor() {
                 }
             }
 
-            val rawPcm = decodeToPcm(tempFile, ext)
-            tempFile.delete()
-
-            if (rawPcm == null || rawPcm.isEmpty()) return null
-            return downsamplePeaks(rawPcm, TARGET_SAMPLES)
+            return decodeToPeaks(tempFile, ext)
         } catch (e: Exception) {
             Log.w(TAG, "decodeFromUrl failed: ${e.message}")
             return null
+        } finally {
+            tempFile.delete()
         }
     }
 
-    private fun decodeToPcm(file: File, extension: String): ShortArray? {
+    private fun decodeToPeaks(file: File, extension: String): FloatArray? {
         val extractor = android.media.MediaExtractor()
+        var codec: android.media.MediaCodec? = null
         try {
             extractor.setDataSource(file.absolutePath)
             val format = extractor.getTrackFormat(0)
             val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: return null
 
-            val codec = android.media.MediaCodec.createDecoderByType(mime)
-            codec.configure(format, null, null, 0)
-            codec.start()
+            val c = android.media.MediaCodec.createDecoderByType(mime)
+            codec = c
+            c.configure(format, null, null, 0)
+            c.start()
 
-            val pcmChunks = mutableListOf<ShortArray>()
+            // Downsample peaks per-chunk to avoid accumulating full PCM in memory.
+            // Target ~TARGET_SAMPLES total; estimate bins per chunk based on duration ratio.
+            val totalDurationUs = format.getLong(android.media.MediaFormat.KEY_DURATION)
+            val peakAccum = FloatArray(TARGET_SAMPLES)
+            val peakCounts = IntArray(TARGET_SAMPLES)
             val bufferInfo = android.media.MediaCodec.BufferInfo()
             var inputDone = false
             var outputDone = false
+            var totalSamplesDecoded = 0L
 
             while (!outputDone) {
                 if (!inputDone) {
-                    val inputIndex = codec.dequeueInputBuffer(10_000)
+                    val inputIndex = c.dequeueInputBuffer(10_000)
                     if (inputIndex >= 0) {
-                        val inputBuffer = codec.getInputBuffer(inputIndex) ?: continue
+                        val inputBuffer = c.getInputBuffer(inputIndex) ?: continue
                         val sampleSize = extractor.readSampleData(inputBuffer, 0)
                         if (sampleSize < 0) {
-                            codec.queueInputBuffer(inputIndex, 0, 0, 0,
+                            c.queueInputBuffer(inputIndex, 0, 0, 0,
                                 android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM)
                             inputDone = true
                         } else {
-                            codec.queueInputBuffer(inputIndex, 0, sampleSize,
+                            c.queueInputBuffer(inputIndex, 0, sampleSize,
                                 extractor.sampleTime, 0)
                             extractor.advance()
                         }
                     }
                 }
 
-                val outputIndex = codec.dequeueOutputBuffer(bufferInfo, 10_000)
+                val outputIndex = c.dequeueOutputBuffer(bufferInfo, 10_000)
                 if (outputIndex >= 0) {
                     if (bufferInfo.flags and android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
                         outputDone = true
                     }
                     if (bufferInfo.size > 0) {
-                        val outputBuffer = codec.getOutputBuffer(outputIndex) ?: continue
+                        val outputBuffer = c.getOutputBuffer(outputIndex) ?: continue
                         outputBuffer.position(bufferInfo.offset)
                         outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
-                        val shortArray = ShortArray(bufferInfo.size / 2)
+                        val chunkSize = bufferInfo.size / 2
+                        val shortArray = ShortArray(chunkSize)
                         outputBuffer.asShortBuffer().get(shortArray)
-                        pcmChunks.add(shortArray)
+
+                        // Downsample this chunk's peaks directly into target bins
+                        val chunkStartSample = totalSamplesDecoded
+                        val samplesPerBin = maxOf(1.0, chunkSize.toDouble() / TARGET_SAMPLES)
+                        for (i in 0 until chunkSize) {
+                            val bin = ((chunkStartSample + i) * TARGET_SAMPLES / maxOf(1L, totalDurationUs / 1000 * 44100 / 2)).toInt()
+                                .coerceIn(0, TARGET_SAMPLES - 1)
+                            val abs = kotlin.math.abs(shortArray[i].toInt())
+                            if (abs > peakAccum[bin].toInt()) {
+                                peakAccum[bin] = abs.toFloat()
+                            }
+                        }
+                        totalSamplesDecoded += chunkSize
                     }
-                    codec.releaseOutputBuffer(outputIndex, false)
+                    c.releaseOutputBuffer(outputIndex, false)
                 }
             }
 
-            codec.stop()
-            codec.release()
-
-            if (pcmChunks.isEmpty()) return null
-            val totalSize = pcmChunks.sumOf { it.size }
-            val merged = ShortArray(totalSize)
-            var pos = 0
-            for (chunk in pcmChunks) {
-                System.arraycopy(chunk, 0, merged, pos, chunk.size)
-                pos += chunk.size
-            }
-            return merged
+            // Normalize to 0..1
+            if (totalSamplesDecoded == 0L) return null
+            val maxPeak = peakAccum.maxOrNull() ?: 1f
+            if (maxPeak <= 0f) return FloatArray(TARGET_SAMPLES) { 0.05f }
+            return FloatArray(TARGET_SAMPLES) { (peakAccum[it] / maxPeak).coerceIn(0.05f, 1f) }
         } catch (e: Exception) {
-            Log.w(TAG, "decodeToPcm failed: ${e.message}")
+            Log.w(TAG, "decodeToPeaks failed: ${e.message}")
             return null
         } finally {
+            try { codec?.stop() } catch (_: Exception) {}
+            try { codec?.release() } catch (_: Exception) {}
             extractor.release()
         }
-    }
-
-    private fun downsamplePeaks(pcm: ShortArray, targetSamples: Int): FloatArray {
-        val samplesPerBin = maxOf(1, pcm.size / targetSamples)
-        val result = FloatArray(targetSamples)
-        for (i in 0 until targetSamples) {
-            val start = i * samplesPerBin
-            val end = minOf(start + samplesPerBin, pcm.size)
-            if (start >= pcm.size) break
-            var maxAbs = 0
-            for (j in start until end) {
-                val abs = kotlin.math.abs(pcm[j].toInt())
-                if (abs > maxAbs) maxAbs = abs
-            }
-            result[i] = maxAbs.toFloat() / Short.MAX_VALUE.toFloat()
-        }
-        return result
     }
 }

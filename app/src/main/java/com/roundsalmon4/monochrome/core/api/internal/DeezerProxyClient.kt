@@ -41,12 +41,15 @@ class DeezerProxyClient @Inject constructor(
                 .header("Origin", ORIGIN)
                 .header("Referer", REFERER)
                 .build()
-            val resp = withContext(Dispatchers.IO) { proxyClient.newCall(req).execute() }
-            Log.d(TAG, "HEAD: HTTP ${resp.code}")
-            if (resp.isSuccessful || resp.code == 405 || resp.code == 501) {
-                return url
+            withContext(Dispatchers.IO) {
+                proxyClient.newCall(req).execute().use { resp ->
+                    Log.d(TAG, "HEAD: HTTP ${resp.code}")
+                    if (resp.isSuccessful || resp.code == 405 || resp.code == 501) {
+                        return url
+                    }
+                    Log.w(TAG, "HEAD returned ${resp.code}")
+                }
             }
-            Log.w(TAG, "HEAD returned ${resp.code}")
         } catch (e: Exception) {
             Log.w(TAG, "HEAD failed: ${e.message}")
         }
@@ -57,13 +60,15 @@ class DeezerProxyClient @Inject constructor(
                 .header("Origin", ORIGIN)
                 .header("Referer", REFERER)
                 .build()
-            val resp = withContext(Dispatchers.IO) { proxyClient.newCall(req).execute() }
-            Log.d(TAG, "GET: HTTP ${resp.code}")
-            if (resp.isSuccessful) {
-                resp.close()
-                return url
+            withContext(Dispatchers.IO) {
+                proxyClient.newCall(req).execute().use { resp ->
+                    Log.d(TAG, "GET: HTTP ${resp.code}")
+                    if (resp.isSuccessful) {
+                        return url
+                    }
+                    Log.w(TAG, "GET returned ${resp.code}")
+                }
             }
-            Log.w(TAG, "GET returned ${resp.code}")
         } catch (e: Exception) {
             Log.w(TAG, "GET failed: ${e.message}")
         }

@@ -60,6 +60,7 @@ class PlayerViewModel @Inject constructor(
     private var lastPositionSaveAt = 0L
     private var prevWasPlaying = false
     private var sleepTimerJob: Job? = null
+    private var waveformDecodeStarted = false
 
     init {
         viewModelScope.launch {
@@ -76,6 +77,7 @@ class PlayerViewModel @Inject constructor(
                     currentIndex = queue.currentIndex,
                     waveformState = WaveformState()
                 )
+                waveformDecodeStarted = false
                 if (track != null && playerStateManager.shouldStartPlayback(track)) {
                     playTrack(track)
                 }
@@ -115,7 +117,8 @@ class PlayerViewModel @Inject constructor(
                 }
                 prevWasPlaying = snap.isPlaying
 
-                if (snap.isPlaying && !_uiState.value.waveformState.isLoaded && !_uiState.value.waveformState.isError) {
+                if (snap.isPlaying && !waveformDecodeStarted && !_uiState.value.waveformState.isLoaded && !_uiState.value.waveformState.isError) {
+                    waveformDecodeStarted = true
                     val mediaItemUrl = playerController.exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
                     if (mediaItemUrl != null && !mediaItemUrl.startsWith("blob:")) {
                         viewModelScope.launch {
