@@ -10,6 +10,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
+import com.roundsalmon4.monochrome.core.api.internal.SoundCloudClient
+import com.roundsalmon4.monochrome.core.api.internal.DeezerProxyClient
+import com.roundsalmon4.monochrome.core.api.internal.QobuzProxyClient
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
@@ -35,6 +38,9 @@ class TidalApi @Inject constructor(
     private val monochromePlaybackClient: MonochromePlaybackClient,
     private val monochromeSessionRefresher: MonochromeSessionRefresher,
     private val unifiedPlaybackClient: UnifiedPlaybackClient,
+    private val soundCloudClient: SoundCloudClient,
+    private val qobuzProxyClient: QobuzProxyClient,
+    private val deezerProxyClient: DeezerProxyClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -58,13 +64,6 @@ class TidalApi @Inject constructor(
         }
         throw errors.last()
     }
-
-    // Streaming proxies can hang; use short timeouts so fallbacks fail fast
-    private val proxyClient: OkHttpClient = okHttpClient.newBuilder()
-        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
-        .callTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
 
     suspend fun search(query: String): SearchResults {
         val tracks = tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
@@ -133,6 +132,12 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getTrackStreamUrl(track: Track): StreamUrl {
+        val chainStart = System.currentTimeMillis()
+        val maxChainMs = 30_000L
+        fun elapsed(): Boolean = System.currentTimeMillis() - chainStart > maxChainMs
+
+        fun remaining(): Long = maxOf(1_000L, maxChainMs - (System.currentTimeMillis() - chainStart))
+
         // 0. Monochrome Playback: in-house lossless source
         monochromeSessionRefresher.startAutoRefresh()
         try {
@@ -143,100 +148,61 @@ class TidalApi @Inject constructor(
             )
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track) }
         // 0b. Unified Playback (music-api.geeked.wtf): consolidated Amazon/Monochrome/Qobuz source
         try {
-            val result = unifiedPlaybackClient.getStreamUrl(
-                title = track.title, artist = track.artistName,
-                isrc = track.isrc, durationMs = track.durationMs
-            )
+            val result = withTimeout(remaining()) {
+                unifiedPlaybackClient.getStreamUrl(
+                    title = track.title, artist = track.artistName,
+                    isrc = track.isrc, durationMs = track.durationMs
+                )
+            }
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Unified Playback failed: ${e.message}") }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Unified"); throw trackNotFound(track) }
+        // 0c. SoundCloud: free catalog, no ISRC or auth required
+        try {
+            val result = withTimeout(remaining()) {
+                soundCloudClient.getStreamUrl(title = track.title, artist = track.artistName)
+            }
+            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "SoundCloud failed: ${e.message}") }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track) }
         // 1. Qobuz: direct FLAC, no DRM
         if (track.isrc.isNotBlank()) {
             try {
-                val url = getQobuzStreamUrl(track.isrc)
+                val url = withTimeout(remaining()) { qobuzProxyClient.getStreamUrl(track.isrc) }
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
+            if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track) }
             // 2. Deezer: backup
             try {
-                val url = getDeezerStreamUrl(track.isrc)
+                val url = withTimeout(remaining()) { deezerProxyClient.getStreamUrl(track.isrc) }
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
         }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track) }
         // 3. Amazon Music: last resort
         try {
-            val url = withTimeout(12_000L) { getAmazonStreamUrl(track.id) }
+            val url = withTimeout(minOf(12_000L, remaining())) { getAmazonStreamUrl(track.id) }
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw RuntimeException(
-            if (monochromePlaybackClient.wasNotFound)
-                "Track unavailable on Monochrome and fallback sources are offline: ${track.title} - ${track.artistName}"
-            else
-                "All audio sources failed for track ${track.id}"
-        )
+        throw trackNotFound(track)
     }
 
-    private val streamGson = Gson()
-
-    private suspend fun getQobuzStreamUrl(isrc: String): String? {
-        val baseUrl = "https://qobuz.kennyy.com.br"
-        android.util.Log.d("ChromePlayer", "Qobuz: searching ISRC=$isrc at $baseUrl")
-        val searchUrl = "$baseUrl/api/get-music?q=${java.net.URLEncoder.encode(isrc, "UTF-8")}&offset=0"
-        val searchResp = withContext(Dispatchers.IO) {
-            proxyClient.newCall(okhttp3.Request.Builder().url(searchUrl).build()).execute()
+    private fun trackNotFound(track: Track): RuntimeException {
+        val sources = mutableListOf<String>()
+        if (monochromePlaybackClient.wasNotFound) sources.add("Monochrome")
+        if (unifiedPlaybackClient.wasNotFound) sources.add("Unified")
+        if (soundCloudClient.wasNotFound) sources.add("SoundCloud")
+        if (qobuzProxyClient.wasNotFound) sources.add("Qobuz")
+        if (deezerProxyClient.wasNotFound) sources.add("Deezer")
+        val msg = if (sources.isNotEmpty()) {
+            "Track unavailable on ${sources.joinToString(", ")} and all fallbacks exhausted: ${track.title} - ${track.artistName}"
+        } else {
+            "All audio sources failed for ${track.title} - ${track.artistName} (ISRC: ${track.isrc})"
         }
-        android.util.Log.d("ChromePlayer", "Qobuz search: HTTP ${searchResp.code}")
-        if (!searchResp.isSuccessful) {
-            android.util.Log.w("ChromePlayer", "Qobuz search failed: ${searchResp.body?.string()}")
-            return null
-        }
-        val searchBody = searchResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty body") }
-        val searchData = streamGson.fromJson(searchBody, Map::class.java)
-        android.util.Log.d("ChromePlayer", "Qobuz search response: ${searchBody.take(200)}")
-
-        val items = (searchData["data"] as? Map<*, *>)
-            ?.let { it["tracks"] as? Map<*, *> }
-            ?.let { it["items"] as? List<*> }
-        if (items == null) { android.util.Log.w("ChromePlayer", "Qobuz: no items in response"); return null }
-
-        val match = items.firstNotNullOfOrNull { item ->
-            val m = item as? Map<*, *> ?: return@firstNotNullOfOrNull null
-            if (m["isrc"]?.toString()?.lowercase() == isrc.lowercase()) m else null
-        }
-        if (match == null) {
-            android.util.Log.w("ChromePlayer", "Qobuz: no ISRC match for $isrc in ${items.size} items")
-            return null
-        }
-
-        val qobuzTrackId = match["id"]?.toString()
-        if (qobuzTrackId == null) { android.util.Log.w("ChromePlayer", "Qobuz: no track id in match"); return null }
-        android.util.Log.d("ChromePlayer", "Qobuz: found track $qobuzTrackId")
-        val quality = "27" // HI_RES_LOSSLESS
-        val streamResp = withContext(Dispatchers.IO) {
-            proxyClient.newCall(
-                okhttp3.Request.Builder().url("$baseUrl/api/download-music?track_id=$qobuzTrackId&quality=$quality").build()
-            ).execute()
-        }
-        android.util.Log.d("ChromePlayer", "Qobuz download: HTTP ${streamResp.code}")
-        if (!streamResp.isSuccessful) {
-            android.util.Log.w("ChromePlayer", "Qobuz download failed: ${streamResp.body?.string()}")
-            return null
-        }
-        val streamBody = streamResp.body?.string() ?: return null.also { android.util.Log.w("ChromePlayer", "Qobuz empty download body") }
-        val streamData = streamGson.fromJson(streamBody, Map::class.java)
-        if (streamData["success"] == true) {
-            val url = (streamData["data"] as? Map<*, *>)?.get("url")?.toString()
-            android.util.Log.d("ChromePlayer", if (url != null) "Qobuz: got stream URL" else "Qobuz: no URL in response")
-            return url
-        }
-        android.util.Log.w("ChromePlayer", "Qobuz: success=false in download response")
-        return null
-    }
-
-    private fun determineMimeType(url: String, manifest: String): String = when {
-        url.contains("dash+xml") || manifest.contains("<MPD") -> "application/dash+xml"
-        url.contains("mpegURL") || manifest.contains("#EXTM3U") -> "application/x-mpegURL"
-        else -> "audio/flac"
+        return RuntimeException(msg)
     }
 
     private fun TrackItem.toTrack() = Track(
@@ -302,23 +268,6 @@ class TidalApi @Inject constructor(
                 isrc = item["isrc"]?.toString() ?: ""
             )
         }
-    }
-
-    private suspend fun getDeezerStreamUrl(isrc: String): String? {
-        val baseUrl = "https://dzr.tabs-vs-spaces.wtf"
-        val format = "FLAC"
-        val url = "$baseUrl/stream/?isrc=${java.net.URLEncoder.encode(isrc, "UTF-8")}&format=$format"
-        android.util.Log.d("ChromePlayer", "Deezer: trying $url")
-        try {
-            val req = okhttp3.Request.Builder().url(url).head().build()
-            val resp = withContext(Dispatchers.IO) { proxyClient.newCall(req).execute() }
-            android.util.Log.d("ChromePlayer", "Deezer: HTTP ${resp.code}")
-            if (resp.isSuccessful || resp.code == 405 || resp.code == 501) return url
-            android.util.Log.w("ChromePlayer", "Deezer: returned ${resp.code}")
-        } catch (e: Exception) {
-            android.util.Log.w("ChromePlayer", "Deezer: request failed: ${e.message}")
-        }
-        return null
     }
 
     private suspend fun getAmazonStreamUrl(trackId: String): String? {

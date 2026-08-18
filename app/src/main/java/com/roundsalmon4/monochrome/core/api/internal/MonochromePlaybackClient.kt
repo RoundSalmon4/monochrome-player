@@ -84,12 +84,23 @@ class MonochromePlaybackClient @Inject constructor(
             Log.w(TAG, "Monochrome Playback returned no stream URL")
             return null
         }
+        val returnedIsrc = raw["isrc"]?.toString() ?: ""
+        val returnedTitle = raw["title"]?.toString() ?: ""
+        if (isrc.isNotBlank() && returnedIsrc.isNotBlank() && !isrc.equals(returnedIsrc, ignoreCase = true)) {
+            Log.w(TAG, "Monochrome Playback: ISRC mismatch (requested=$isrc, got=$returnedIsrc), rejecting")
+            return null
+        }
+        if (title.isNotBlank() && returnedTitle.isNotBlank() &&
+            !com.roundsalmon4.monochrome.core.util.StringUtil.titlesMatch(title, returnedTitle)) {
+            Log.w(TAG, "Monochrome Playback: title mismatch (requested=$title, got=$returnedTitle), rejecting")
+            return null
+        }
         Log.d(TAG, "Got Monochrome Playback stream URL")
         return MonochromeStreamResult(
             url = url,
             mimeType = raw["mime_type"]?.toString() ?: "audio/flac",
-            isrc = raw["isrc"]?.toString(),
-            title = raw["title"]?.toString()
+            isrc = returnedIsrc.ifBlank { null },
+            title = returnedTitle.ifBlank { null }
         )
     }
 }

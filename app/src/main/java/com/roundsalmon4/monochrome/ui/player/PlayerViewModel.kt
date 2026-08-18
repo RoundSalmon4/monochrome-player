@@ -39,7 +39,8 @@ data class PlayerUiState(
     val volume: Float = 1.0f,
     val isShuffleEnabled: Boolean = false,
     val repeatMode: RepeatMode = RepeatMode.OFF,
-    val sleepTimerMinutes: Int = 0
+    val sleepTimerMinutes: Int = 0,
+    val waveformState: WaveformState = WaveformState()
 )
 
 @HiltViewModel
@@ -49,7 +50,8 @@ class PlayerViewModel @Inject constructor(
     private val historyDao: HistoryDao,
     private val playerController: PlayerEngineController,
     private val playerStateManager: PlayerStateManager,
-    private val playerPreferences: PlayerPreferences
+    private val playerPreferences: PlayerPreferences,
+    private val waveformDecoder: WaveformDecoder
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -71,7 +73,8 @@ class PlayerViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     currentTrack = track,
                     queueSize = queue.tracks.size,
-                    currentIndex = queue.currentIndex
+                    currentIndex = queue.currentIndex,
+                    waveformState = WaveformState()
                 )
                 if (track != null && playerStateManager.shouldStartPlayback(track)) {
                     playTrack(track)
@@ -111,6 +114,24 @@ class PlayerViewModel @Inject constructor(
                     persistPosition(track, snap.currentPosition)
                 }
                 prevWasPlaying = snap.isPlaying
+
+                if (snap.isPlaying && !_uiState.value.waveformState.isLoaded && !_uiState.value.waveformState.isError) {
+                    val mediaItemUrl = playerController.exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
+                    if (mediaItemUrl != null && !mediaItemUrl.startsWith("blob:")) {
+                        viewModelScope.launch {
+                            val samples = waveformDecoder.decode(mediaItemUrl)
+                            if (samples != null) {
+                                _uiState.value = _uiState.value.copy(
+                                    waveformState = WaveformState(samples = samples, isLoaded = true)
+                                )
+                            } else {
+                                _uiState.value = _uiState.value.copy(
+                                    waveformState = WaveformState(isError = true)
+                                )
+                            }
+                        }
+                    }
+                }
 
                 if (snap.playbackState == Player.STATE_ENDED) {
                     track?.let { persistPosition(it, it.durationMs) }

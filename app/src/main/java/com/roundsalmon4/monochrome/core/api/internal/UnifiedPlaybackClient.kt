@@ -13,6 +13,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.roundsalmon4.monochrome.core.util.StringUtil
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -94,6 +95,19 @@ class UnifiedPlaybackClient @Inject constructor(
         val delivery = resource["delivery"]?.toString() ?: ""
         val mimeType = resource["mime_type"]?.toString() ?: "audio/flac"
         val source = resource["source"]?.toString() ?: envelope["selected_source"]?.toString() ?: "unified"
+
+        // Verify the returned track matches what we asked for (prevents wrong-track from label metadata errors)
+        val returnedTrack = envelope["track"] as? Map<*, *>
+        val returnedIsrc = returnedTrack?.get("isrc")?.toString() ?: ""
+        val returnedTitle = returnedTrack?.get("title")?.toString() ?: ""
+        if (isrc.isNotBlank() && returnedIsrc.isNotBlank() && !isrc.equals(returnedIsrc, ignoreCase = true)) {
+            Log.w(TAG, "Unified Playback: ISRC mismatch (requested=$isrc, got=$returnedIsrc), rejecting")
+            return null
+        }
+        if (title.isNotBlank() && returnedTitle.isNotBlank() && !StringUtil.titlesMatch(title, returnedTitle)) {
+            Log.w(TAG, "Unified Playback: title mismatch (requested=$title, got=$returnedTitle), rejecting")
+            return null
+        }
 
         if (delivery == "direct" || !isManifestUrl(resourceUrl, delivery, mimeType)) {
             Log.d(TAG, "Unified Playback: direct stream from $source")

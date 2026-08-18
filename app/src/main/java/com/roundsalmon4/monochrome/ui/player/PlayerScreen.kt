@@ -220,23 +220,34 @@ private fun ProgressSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
     val fraction = dragFraction ?: (if (state.duration > 0) state.currentPosition.toFloat() / state.duration else 0f)
     val displayPosition = dragFraction?.let { (it * state.duration).toLong() } ?: state.currentPosition
 
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(formatDuration(displayPosition), style = MaterialTheme.typography.labelSmall)
-        Text(formatDuration(state.duration), style = MaterialTheme.typography.labelSmall)
-    }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(formatDuration(displayPosition), style = MaterialTheme.typography.labelSmall)
+            Text(formatDuration(state.duration), style = MaterialTheme.typography.labelSmall)
+        }
 
-    Slider(
-        value = fraction.coerceIn(0f, 1f),
-        onValueChange = { dragFraction = it },
-        onValueChangeFinished = {
-            dragFraction?.let { viewModel.seekTo((it * state.duration).toLong()) }
-            dragFraction = null
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
+        if (state.waveformState.isLoaded && state.waveformState.sampleCount > 0) {
+            WaveformSeekbar(
+                waveformSamples = state.waveformState.samples,
+                currentPositionMs = state.currentPosition,
+                durationMs = state.duration,
+                onSeek = { viewModel.seekTo(it) }
+            )
+        } else {
+            Slider(
+                value = fraction.coerceIn(0f, 1f),
+                onValueChange = { dragFraction = it },
+                onValueChangeFinished = {
+                    dragFraction?.let { viewModel.seekTo((it * state.duration).toLong()) }
+                    dragFraction = null
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
 }
 
 @Composable
