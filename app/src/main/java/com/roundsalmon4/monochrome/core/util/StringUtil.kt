@@ -20,7 +20,11 @@ object StringUtil {
         val b = normalizeTitle(result)
         if (a.isEmpty() || b.isEmpty()) return true
         if (a == b) return true
-        if (a.contains(b) || b.contains(a)) return true
+        // Only allow substring match when the shorter string is >= 60% the length of the longer one
+        // This prevents "Love" from matching "Love Story"
+        if (a.length >= 3 && b.length >= 3) {
+            if ((a.contains(b) || b.contains(a)) && minOf(a.length, b.length).toDouble() / maxOf(a.length, b.length) >= 0.6) return true
+        }
         return similarity(a, b) >= threshold
     }
 

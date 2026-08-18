@@ -38,8 +38,8 @@ class SoundCloudClient @Inject constructor(
     }
 
     private val gson = Gson()
-    private var clientId: String? = null
-    private var lastExtractAttempt: Long = 0L
+    @Volatile private var clientId: String? = null
+    @Volatile private var lastExtractAttempt: Long = 0L
 
     @Volatile
     var wasNotFound: Boolean = false
