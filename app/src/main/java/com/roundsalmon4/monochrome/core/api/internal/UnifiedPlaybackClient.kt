@@ -85,6 +85,7 @@ class UnifiedPlaybackClient @Inject constructor(
             }
         } ?: return null
 
+        val envelope = result ?: return null
         val playback = envelope["playback"] as? List<*> ?: run {
             Log.w(TAG, "Unified Playback: no playback array")
             return null
