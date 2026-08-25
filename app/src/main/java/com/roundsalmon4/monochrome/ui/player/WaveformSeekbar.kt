@@ -22,7 +22,7 @@ import kotlin.math.floor
 
 @Composable
 fun WaveformSeekbar(
-    waveformSamples: FloatArray?,
+    waveformState: WaveformState,
     currentPositionMs: Long,
     durationMs: Long,
     onSeek: (Long) -> Unit,
@@ -30,6 +30,7 @@ fun WaveformSeekbar(
 ) {
     var dragFraction by remember { mutableStateOf<Float?>(null) }
     val fraction = dragFraction ?: (if (durationMs > 0) currentPositionMs.toFloat() / durationMs else 0f)
+    val waveformSamples = waveformState.samples
 
     val playedColor = MaterialTheme.colorScheme.primary
     val unplayedColor = MaterialTheme.colorScheme.surfaceVariant
@@ -62,7 +63,7 @@ fun WaveformSeekbar(
                 )
             }
     ) {
-        if (waveformSamples == null || waveformSamples.isEmpty()) {
+        if (!waveformState.isLoaded || waveformSamples.isEmpty()) {
             // Fallback: simple centered line
             drawRoundRect(
                 color = unplayedColor,

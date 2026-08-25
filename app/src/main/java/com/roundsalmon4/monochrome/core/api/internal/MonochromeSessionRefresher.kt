@@ -67,7 +67,7 @@ class MonochromeSessionRefresher @Inject constructor(
     private val refreshMutex = Mutex()
     private val _status = MutableStateFlow<MonochromeSessionStatus>(MonochromeSessionStatus.Unknown)
     val status: StateFlow<MonochromeSessionStatus> = _status.asStateFlow()
-    private var autoRefreshStarted = false
+    @Volatile private var autoRefreshStarted = false
 
     /** Returns a usable session token, obtaining or refreshing one silently if the stored one is missing or close to expiry. */
     suspend fun getValidToken(): String? {

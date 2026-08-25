@@ -23,13 +23,21 @@ class PlaybackService : MediaSessionService() {
             mediaSession = MediaSession.Builder(this, player)
                 .setSessionActivity(sessionPendingIntent())
                 .build()
-        } else {
-            startForeground(FOREGROUND_SERVICE_ID, buildFallbackNotification())
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Must call super so MediaSessionService issues startForeground + the media notification.
+        // If player became available since onCreate, build the session now.
+        if (mediaSession == null) {
+            val player = playerController?.exoPlayer
+            if (player != null) {
+                mediaSession = MediaSession.Builder(this, player)
+                    .setSessionActivity(sessionPendingIntent())
+                    .build()
+            } else {
+                startForeground(FOREGROUND_SERVICE_ID, buildFallbackNotification())
+            }
+        }
         return super.onStartCommand(intent, flags, startId)
     }
 

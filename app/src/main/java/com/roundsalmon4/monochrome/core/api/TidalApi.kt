@@ -152,7 +152,8 @@ class TidalApi @Inject constructor(
             }
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track) }
+        val monoNotFound = monochromePlaybackClient.wasNotFound
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound)) }
         // 0b. Unified Playback (music-api.geeked.wtf): consolidated Amazon/Monochrome/Qobuz source
         try {
             val result = withTimeout(remaining()) {
@@ -163,7 +164,8 @@ class TidalApi @Inject constructor(
             }
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Unified Playback failed: ${e.message}") }
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Unified"); throw trackNotFound(track) }
+        val unifiedNotFound = unifiedPlaybackClient.wasNotFound
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Unified"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound)) }
         // 0c. SoundCloud: free catalog, no ISRC or auth required
         try {
             val result = withTimeout(remaining()) {
@@ -171,36 +173,36 @@ class TidalApi @Inject constructor(
             }
             if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "SoundCloud failed: ${e.message}") }
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track) }
+        val scNotFound = soundCloudClient.wasNotFound
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound)) }
         // 1. Qobuz: direct FLAC, no DRM
+        var qobuzNotFound = false
+        var deezerNotFound = false
         if (track.isrc.isNotBlank()) {
             try {
                 val url = withTimeout(remaining()) { qobuzProxyClient.getStreamUrl(track.isrc) }
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
-            if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track) }
+            qobuzNotFound = qobuzProxyClient.wasNotFound
+            if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound)) }
             // 2. Deezer: backup
             try {
                 val url = withTimeout(remaining()) { deezerProxyClient.getStreamUrl(track.isrc) }
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
+            deezerNotFound = deezerProxyClient.wasNotFound
         }
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track) }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound)) }
         // 3. Amazon Music: last resort
         try {
             val url = withTimeout(minOf(12_000L, remaining())) { getAmazonStreamUrl(track.id) }
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw trackNotFound(track)
+        throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound))
     }
 
-    private fun trackNotFound(track: Track): RuntimeException {
-        val sources = mutableListOf<String>()
-        if (monochromePlaybackClient.wasNotFound) sources.add("Monochrome")
-        if (unifiedPlaybackClient.wasNotFound) sources.add("Unified")
-        if (soundCloudClient.wasNotFound) sources.add("SoundCloud")
-        if (qobuzProxyClient.wasNotFound) sources.add("Qobuz")
-        if (deezerProxyClient.wasNotFound) sources.add("Deezer")
+    private fun trackNotFound(track: Track, notFoundFlags: List<Pair<String, Boolean>>): RuntimeException {
+        val sources = notFoundFlags.filter { it.second }.map { it.first }
         val msg = if (sources.isNotEmpty()) {
             "Track unavailable on ${sources.joinToString(", ")} and all fallbacks exhausted: ${track.title} - ${track.artistName}"
         } else {

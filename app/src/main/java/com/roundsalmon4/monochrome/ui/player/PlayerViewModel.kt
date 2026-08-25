@@ -61,6 +61,7 @@ class PlayerViewModel @Inject constructor(
     private var prevWasPlaying = false
     private var sleepTimerJob: Job? = null
     private var waveformDecodeStarted = false
+    private var waveformDecodeJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -78,6 +79,7 @@ class PlayerViewModel @Inject constructor(
                     waveformState = WaveformState()
                 )
                 waveformDecodeStarted = false
+                waveformDecodeJob?.cancel()
                 if (track != null && playerStateManager.shouldStartPlayback(track)) {
                     playTrack(track)
                 }
@@ -121,7 +123,7 @@ class PlayerViewModel @Inject constructor(
                     waveformDecodeStarted = true
                     val mediaItemUrl = playerController.exoPlayer.currentMediaItem?.localConfiguration?.uri?.toString()
                     if (mediaItemUrl != null && !mediaItemUrl.startsWith("blob:")) {
-                        viewModelScope.launch {
+                        waveformDecodeJob = viewModelScope.launch {
                             val samples = waveformDecoder.decode(mediaItemUrl)
                             if (samples != null) {
                                 _uiState.value = _uiState.value.copy(

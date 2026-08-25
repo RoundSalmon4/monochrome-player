@@ -232,7 +232,7 @@ private fun ProgressSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
 
         if (state.waveformState.isLoaded && state.waveformState.sampleCount > 0) {
             WaveformSeekbar(
-                waveformSamples = state.waveformState.samples,
+                waveformState = state.waveformState,
                 currentPositionMs = state.currentPosition,
                 durationMs = state.duration,
                 onSeek = { viewModel.seekTo(it) }

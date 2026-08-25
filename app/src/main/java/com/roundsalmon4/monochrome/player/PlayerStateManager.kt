@@ -68,7 +68,7 @@ class PlayerStateManager @Inject constructor(
     val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
 
     private var startedTrackId: String? = null
-    private var shuffleOrder: MutableList<Int> = mutableListOf()
+    @Volatile private var shuffleOrder: MutableList<Int> = mutableListOf()
 
     init {
         scope.launch {
