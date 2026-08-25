@@ -36,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -253,6 +254,7 @@ private fun ProgressSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
 @Composable
 private fun VolumeRow(volume: Float, viewModel: PlayerViewModel) {
     var localVolume by remember { mutableStateOf(volume) }
+    LaunchedEffect(volume) { localVolume = volume }
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically

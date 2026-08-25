@@ -8,7 +8,9 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.roundsalmon4.monochrome.MainActivity
 import com.roundsalmon4.monochrome.player.PlayerEngineController
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null

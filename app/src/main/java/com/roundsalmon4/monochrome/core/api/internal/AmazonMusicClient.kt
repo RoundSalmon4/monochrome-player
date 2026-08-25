@@ -59,19 +59,22 @@ class AmazonMusicClient @Inject constructor(
             .url("$API_BASE/api/track/?id=$trackId&quality=HD")
             .header("X-Turnstile-JWT", jwt)
             .build()
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-        if (resp.code == 401 || resp.code == 428) { cachedJwt = null; Log.w(TAG, "JWT rejected"); return null }
-        if (!resp.isSuccessful) { Log.w(TAG, "Amazon: HTTP ${resp.code}"); return null }
+        return withContext(Dispatchers.IO) {
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 428) { cachedJwt = null; Log.w(TAG, "JWT rejected"); return@use null }
+                if (!resp.isSuccessful) { Log.w(TAG, "Amazon: HTTP ${resp.code}"); return@use null }
 
-        val raw = gson.fromJson(resp.body?.string(), Map::class.java)
-        val data = (raw["data"] as? Map<*, *>) ?: (raw["track"] as? Map<*, *>) ?: raw
-        val streamUrl = data["stream_url"]?.toString() ?: data["url"]?.toString() ?: return null
-        Log.d(TAG, "Got stream URL")
-        return AmazonStreamResult(
-            url = streamUrl, sourceUrl = streamUrl,
-            decryptionKey = data["decryption_key"]?.toString(),
-            keyId = null
-        )
+                val raw = gson.fromJson(resp.body?.string(), Map::class.java)
+                val data = (raw["data"] as? Map<*, *>) ?: (raw["track"] as? Map<*, *>) ?: raw
+                val streamUrl = data["stream_url"]?.toString() ?: data["url"]?.toString() ?: return@use null
+                Log.d(TAG, "Got stream URL")
+                AmazonStreamResult(
+                    url = streamUrl, sourceUrl = streamUrl,
+                    decryptionKey = data["decryption_key"]?.toString(),
+                    keyId = null
+                )
+            }
+        }
     }
 
     private suspend fun resolveJwt(): String? {
@@ -98,27 +101,32 @@ class AmazonMusicClient @Inject constructor(
     private suspend fun exchangeTokenForJwt(token: String): String? {
         val body = FormBody.Builder().add("turnstile_response", token).build()
         val req = okhttp3.Request.Builder().url("$API_BASE/api/auth/turnstile").post(body).build()
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-        if (!resp.isSuccessful) return null
-        val data = gson.fromJson(resp.body?.string(), Map::class.java)
-        return data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
+        return withContext(Dispatchers.IO) {
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) return@use null
+                val data = gson.fromJson(resp.body?.string(), Map::class.java)
+                data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
+            }
+        }
     }
 
     private suspend fun exchangeBypassForJwt(bypass: String): String? {
         val req = okhttp3.Request.Builder()
             .url("$API_BASE/api/track/?id=1&quality=HD&bypass_token=$bypass")
             .build()
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-        if (resp.code == 428) {
-            // 428 means we need to verify the bypass token is valid, exchange it for a JWT
-            val body = FormBody.Builder().add("bypass_token", bypass).build()
-            val exchangeReq = okhttp3.Request.Builder().url("$API_BASE/api/auth/turnstile").post(body).build()
-            val exchangeResp = withContext(Dispatchers.IO) { okHttpClient.newCall(exchangeReq).execute() }
-            if (!exchangeResp.isSuccessful) return null
-            val data = gson.fromJson(exchangeResp.body?.string(), Map::class.java)
-            return data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
+        return withContext(Dispatchers.IO) {
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (resp.code == 428) {
+                    val body = FormBody.Builder().add("bypass_token", bypass).build()
+                    val exchangeReq = okhttp3.Request.Builder().url("$API_BASE/api/auth/turnstile").post(body).build()
+                    okHttpClient.newCall(exchangeReq).execute().use { exchangeResp ->
+                        if (!exchangeResp.isSuccessful) return@use null
+                        val data = gson.fromJson(exchangeResp.body?.string(), Map::class.java)
+                        data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
+                    }
+                } else null
+            }
         }
-        return null
     }
 
     @SuppressLint("SetJavaScriptEnabled")

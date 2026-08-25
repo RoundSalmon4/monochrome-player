@@ -36,15 +36,16 @@ class QobuzProxyClient @Inject constructor(
         Log.d(TAG, "Searching ISRC=$isrc")
 
         val searchUrl = "$PROXY_BASE/api/get-music?q=${java.net.URLEncoder.encode(isrc, "UTF-8")}&offset=0"
-        val searchResp = withContext(Dispatchers.IO) {
-            proxyClient.newCall(Request.Builder().url(searchUrl).build()).execute()
-        }
-        Log.d(TAG, "Search: HTTP ${searchResp.code}")
-        if (!searchResp.isSuccessful) {
-            Log.w(TAG, "Search failed: ${searchResp.body?.string()}")
-            return null
-        }
-        val searchBody = searchResp.body?.string() ?: return null.also { Log.w(TAG, "Empty search body") }
+        val searchBody = withContext(Dispatchers.IO) {
+            proxyClient.newCall(Request.Builder().url(searchUrl).build()).execute().use { resp ->
+                Log.d(TAG, "Search: HTTP ${resp.code}")
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Search failed: ${resp.body?.string()}")
+                    return@use null
+                }
+                resp.body?.string()
+            }
+        } ?: return null.also { Log.w(TAG, "Empty search body") }
         val searchData = gson.fromJson(searchBody, Map::class.java)
         Log.d(TAG, "Search response: ${searchBody.take(200)}")
 
@@ -70,17 +71,18 @@ class QobuzProxyClient @Inject constructor(
         }
 
         Log.d(TAG, "Found track $qobuzId")
-        val streamResp = withContext(Dispatchers.IO) {
+        val streamBody = withContext(Dispatchers.IO) {
             proxyClient.newCall(
                 Request.Builder().url("$PROXY_BASE/api/download-music?track_id=$qobuzId&quality=$QUALITY").build()
-            ).execute()
-        }
-        Log.d(TAG, "Download: HTTP ${streamResp.code}")
-        if (!streamResp.isSuccessful) {
-            Log.w(TAG, "Download failed: ${streamResp.body?.string()}")
-            return null
-        }
-        val streamBody = streamResp.body?.string() ?: return null.also { Log.w(TAG, "Empty download body") }
+            ).execute().use { resp ->
+                Log.d(TAG, "Download: HTTP ${resp.code}")
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Download failed: ${resp.body?.string()}")
+                    return@use null
+                }
+                resp.body?.string()
+            }
+        } ?: return null.also { Log.w(TAG, "Empty download body") }
         val streamData = gson.fromJson(streamBody, Map::class.java)
         if (streamData["success"] == true) {
             val url = (streamData["data"] as? Map<*, *>)?.get("url")?.toString()

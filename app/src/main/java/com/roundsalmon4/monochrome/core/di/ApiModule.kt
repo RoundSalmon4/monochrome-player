@@ -21,10 +21,9 @@ object ApiModule {
     @Singleton
     @Named("api.instances")
     fun provideApiInstances(): List<String> = listOf(
-        "https://api.monochrome.tf/",
-        "https://monochrome-api.samidy.com/",
         "https://eu-central.monochrome.tf/",
-        "https://us-west.monochrome.tf/"
+        "https://us-west.monochrome.tf/",
+        "https://api.monochrome.tf/"
     )
 
     @Provides
@@ -33,7 +32,7 @@ object ApiModule {
         val logging = HttpLoggingInterceptor { message ->
             android.util.Log.println(android.util.Log.DEBUG, "ChromePlayer-Http", message)
         }.apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.BASIC
         }
         val userAgent = Interceptor { chain ->
             val request = chain.request().newBuilder()

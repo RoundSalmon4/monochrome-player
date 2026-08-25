@@ -7,6 +7,8 @@ import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.UnifiedPlaybackClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
@@ -65,11 +67,11 @@ class TidalApi @Inject constructor(
         throw errors.last()
     }
 
-    suspend fun search(query: String): SearchResults {
-        val tracks = tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
-        val artists = tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
-        val albums = tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
-        return SearchResults(tracks = tracks, artists = artists, albums = albums)
+    suspend fun search(query: String): SearchResults = coroutineScope {
+        val tracksDef = async { tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() } }
+        val artistsDef = async { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
+        val albumsDef = async { tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
+        SearchResults(tracks = tracksDef.await(), artists = artistsDef.await(), albums = albumsDef.await())
     }
 
     suspend fun searchAlbums(query: String): List<Album> {

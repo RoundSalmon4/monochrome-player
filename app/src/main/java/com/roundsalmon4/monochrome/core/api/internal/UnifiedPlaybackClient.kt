@@ -60,25 +60,30 @@ class UnifiedPlaybackClient @Inject constructor(
             .header("Accept", "application/json")
             .build()
 
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
-        if (resp.code == 401 || resp.code == 428) {
-            Log.w(TAG, "Unified JWT rejected (${resp.code})")
-            prefs.setUnifiedJwt("", 0L)
-            return null
-        }
-        if (resp.code == 429) { Log.w(TAG, "Unified Playback rate limited"); return null }
-        if (resp.code == 404 || resp.code == 502) {
-            wasNotFound = true
-            Log.w(TAG, "Unified Playback: track not found")
-            return null
-        }
-        if (!resp.isSuccessful) { Log.w(TAG, "Unified Playback lookup: HTTP ${resp.code}"); return null }
+        val result = withContext(Dispatchers.IO) {
+            okHttpClient.newCall(request).execute().use { resp ->
+                if (resp.code == 401 || resp.code == 428) {
+                    Log.w(TAG, "Unified JWT rejected (${resp.code})")
+                    prefs.setUnifiedJwt("", 0L)
+                    return@use null
+                }
+                if (resp.code == 429) { Log.w(TAG, "Unified Playback rate limited"); return@use null }
+                if (resp.code == 404 || resp.code == 502) {
+                    wasNotFound = true
+                    Log.w(TAG, "Unified Playback: track not found")
+                    return@use null
+                }
+                if (!resp.isSuccessful) { Log.w(TAG, "Unified Playback lookup: HTTP ${resp.code}"); return@use null }
 
-        val envelope = resp.body?.string()?.let {
-            runCatching {
-                gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
-            }.getOrNull()
-        } ?: run { Log.w(TAG, "Unified Playback: empty/invalid lookup"); return null }
+                val envelope = resp.body?.string()?.let {
+                    runCatching {
+                        gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+                    }.getOrNull()
+                } ?: run { Log.w(TAG, "Unified Playback: empty/invalid lookup"); return@use null }
+
+                envelope
+            }
+        } ?: return null
 
         val playback = envelope["playback"] as? List<*> ?: run {
             Log.w(TAG, "Unified Playback: no playback array")
@@ -126,28 +131,26 @@ class UnifiedPlaybackClient @Inject constructor(
             .header("Authorization", "Bearer $API_TOKEN")
             .header("Accept", "application/json")
             .build()
-        return try {
-            val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
-            if (!resp.isSuccessful) {
-                Log.w(TAG, "Unified Playback decrypt: HTTP ${resp.code}")
-                return null
+        return withContext(Dispatchers.IO) {
+            okHttpClient.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Unified Playback decrypt: HTTP ${resp.code}")
+                    return@use null
+                }
+                val body = resp.body?.string()
+                val data = body?.let {
+                    runCatching {
+                        gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+                    }.getOrNull()
+                }
+                val url = data?.get("url")?.toString()?.takeIf { it.isNotBlank() }
+                if (url != null) {
+                    Log.d(TAG, "Unified Playback: got decrypted stream")
+                    return@use MonochromeStreamResult(url = url, mimeType = data["mime_type"]?.toString() ?: "audio/flac")
+                }
+                Log.w(TAG, "Unified Playback decrypt: no url in response (${body?.take(200)})")
+                null
             }
-            val body = resp.body?.string()
-            val data = body?.let {
-                runCatching {
-                    gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
-                }.getOrNull()
-            }
-            val url = data?.get("url")?.toString()?.takeIf { it.isNotBlank() }
-            if (url != null) {
-                Log.d(TAG, "Unified Playback: got decrypted stream")
-                return MonochromeStreamResult(url = url, mimeType = data["mime_type"]?.toString() ?: "audio/flac")
-            }
-            Log.w(TAG, "Unified Playback decrypt: no url in response (${body?.take(200)})")
-            null
-        } catch (e: Exception) {
-            Log.w(TAG, "Unified Playback decrypt failed: ${e.message}")
-            null
         }
     }
 
@@ -175,25 +178,28 @@ class UnifiedPlaybackClient @Inject constructor(
             .header("Content-Type", "application/json")
             .post(body.toRequestBody("application/json".toMediaType()))
             .build()
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
-        if (!resp.isSuccessful) {
-            Log.w(TAG, "Unified auth/turnstile: HTTP ${resp.code}")
-            return null
+        return withContext(Dispatchers.IO) {
+            okHttpClient.newCall(request).execute().use { resp ->
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Unified auth/turnstile: HTTP ${resp.code}")
+                    return@use null
+                }
+                val data = resp.body?.string()?.let {
+                    runCatching {
+                        gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+                    }.getOrNull()
+                } ?: return@use null
+                val jwt = data["access_token"]?.toString()
+                    ?: data["jwt"]?.toString()
+                    ?: data["token"]?.toString()
+                if (jwt.isNullOrBlank()) { Log.w(TAG, "Unified auth: no JWT in response"); return@use null }
+                val expiry = jwtExpiryMillis(jwt).takeIf { it > 0 }
+                    ?: (System.currentTimeMillis() + 55 * 60 * 1000L)
+                prefs.setUnifiedJwt(jwt, expiry)
+                Log.i(TAG, "Unified JWT obtained, expires in ~${(expiry - System.currentTimeMillis()) / 1000}s")
+                jwt
+            }
         }
-        val data = resp.body?.string()?.let {
-            runCatching {
-                gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
-            }.getOrNull()
-        } ?: return null
-        val jwt = data["access_token"]?.toString()
-            ?: data["jwt"]?.toString()
-            ?: data["token"]?.toString()
-        if (jwt.isNullOrBlank()) { Log.w(TAG, "Unified auth: no JWT in response"); return null }
-        val expiry = jwtExpiryMillis(jwt).takeIf { it > 0 }
-            ?: (System.currentTimeMillis() + 55 * 60 * 1000L)
-        prefs.setUnifiedJwt(jwt, expiry)
-        Log.i(TAG, "Unified JWT obtained, expires in ~${(expiry - System.currentTimeMillis()) / 1000}s")
-        return jwt
     }
 
     private fun jwtExpiryMillis(jwt: String): Long {

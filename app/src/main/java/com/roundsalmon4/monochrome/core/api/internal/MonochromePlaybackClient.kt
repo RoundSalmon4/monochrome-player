@@ -65,42 +65,46 @@ class MonochromePlaybackClient @Inject constructor(
             .post(body.toRequestBody("application/json".toMediaType()))
             .build()
 
-        val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }
-        if (resp.code == 401) { Log.w(TAG, "Monochrome Playback session rejected"); return null }
-        if (resp.code == 429) { Log.w(TAG, "Monochrome Playback rate limited"); return null }
-        if (resp.code == 404) {
-            wasNotFound = true
-            Log.w(TAG, "Monochrome Playback: track not in catalog")
-            return null
-        }
-        if (!resp.isSuccessful) { Log.w(TAG, "Monochrome Playback: HTTP ${resp.code}"); return null }
+        val result = withContext(Dispatchers.IO) {
+            okHttpClient.newCall(request).execute().use { resp ->
+                if (resp.code == 401) { Log.w(TAG, "Monochrome Playback session rejected"); return@use null }
+                if (resp.code == 429) { Log.w(TAG, "Monochrome Playback rate limited"); return@use null }
+                if (resp.code == 404) {
+                    wasNotFound = true
+                    Log.w(TAG, "Monochrome Playback: track not in catalog")
+                    return@use null
+                }
+                if (!resp.isSuccessful) { Log.w(TAG, "Monochrome Playback: HTTP ${resp.code}"); return@use null }
 
-        val raw = resp.body?.string()?.let {
-            runCatching {
-                gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
-            }.getOrNull()
-        } ?: run { Log.w(TAG, "Monochrome Playback: empty/invalid response"); return null }
-        val url = raw["url"]?.toString()?.takeIf { it.isNotBlank() } ?: run {
-            Log.w(TAG, "Monochrome Playback returned no stream URL")
-            return null
+                val raw = resp.body?.string()?.let {
+                    runCatching {
+                        gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
+                    }.getOrNull()
+                } ?: run { Log.w(TAG, "Monochrome Playback: empty/invalid response"); return@use null }
+                val url = raw["url"]?.toString()?.takeIf { it.isNotBlank() } ?: run {
+                    Log.w(TAG, "Monochrome Playback returned no stream URL")
+                    return@use null
+                }
+                val returnedIsrc = raw["isrc"]?.toString() ?: ""
+                val returnedTitle = raw["title"]?.toString() ?: ""
+                if (isrc.isNotBlank() && returnedIsrc.isNotBlank() && !isrc.equals(returnedIsrc, ignoreCase = true)) {
+                    Log.w(TAG, "Monochrome Playback: ISRC mismatch (requested=$isrc, got=$returnedIsrc), rejecting")
+                    return@use null
+                }
+                if (title.isNotBlank() && returnedTitle.isNotBlank() &&
+                    !com.roundsalmon4.monochrome.core.util.StringUtil.titlesMatch(title, returnedTitle)) {
+                    Log.w(TAG, "Monochrome Playback: title mismatch (requested=$title, got=$returnedTitle), rejecting")
+                    return@use null
+                }
+                Log.d(TAG, "Got Monochrome Playback stream URL")
+                MonochromeStreamResult(
+                    url = url,
+                    mimeType = raw["mime_type"]?.toString() ?: "audio/flac",
+                    isrc = returnedIsrc.ifBlank { null },
+                    title = returnedTitle.ifBlank { null }
+                )
+            }
         }
-        val returnedIsrc = raw["isrc"]?.toString() ?: ""
-        val returnedTitle = raw["title"]?.toString() ?: ""
-        if (isrc.isNotBlank() && returnedIsrc.isNotBlank() && !isrc.equals(returnedIsrc, ignoreCase = true)) {
-            Log.w(TAG, "Monochrome Playback: ISRC mismatch (requested=$isrc, got=$returnedIsrc), rejecting")
-            return null
-        }
-        if (title.isNotBlank() && returnedTitle.isNotBlank() &&
-            !com.roundsalmon4.monochrome.core.util.StringUtil.titlesMatch(title, returnedTitle)) {
-            Log.w(TAG, "Monochrome Playback: title mismatch (requested=$title, got=$returnedTitle), rejecting")
-            return null
-        }
-        Log.d(TAG, "Got Monochrome Playback stream URL")
-        return MonochromeStreamResult(
-            url = url,
-            mimeType = raw["mime_type"]?.toString() ?: "audio/flac",
-            isrc = returnedIsrc.ifBlank { null },
-            title = returnedTitle.ifBlank { null }
-        )
+        return result
     }
 }
