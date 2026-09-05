@@ -17,8 +17,10 @@ import com.roundsalmon4.monochrome.core.api.internal.DeezerProxyClient
 import com.roundsalmon4.monochrome.core.api.internal.QobuzProxyClient
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
+import com.roundsalmon4.monochrome.core.api.internal.dto.ApiResponse
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.ArtistResponseData
+import com.roundsalmon4.monochrome.core.api.internal.dto.SearchData
 import com.roundsalmon4.monochrome.core.api.internal.dto.TrackItem
 import com.roundsalmon4.monochrome.core.api.model.Album
 import com.roundsalmon4.monochrome.core.api.model.Artist
@@ -68,7 +70,7 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun search(query: String): SearchResults = coroutineScope {
-        val tracksDef = async { tryInstances { it.searchTracks(query) }.data?.tracks?.items.orEmpty().map { it.toTrack() } }
+        val tracksDef = async { trackResults { it.searchTracks(query) } }
         val artistsDef = async { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
         val albumsDef = async { tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
         SearchResults(tracks = tracksDef.await(), artists = artistsDef.await(), albums = albumsDef.await())
@@ -79,7 +81,7 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun searchTracks(query: String, offset: Int): List<Track> {
-        return tryInstances { it.searchTracks(query, offset) }.data?.tracks?.items.orEmpty().map { it.toTrack() }
+        return trackResults { it.searchTracks(query, offset) }
     }
 
     suspend fun searchArtists(query: String, offset: Int): List<Artist> {
@@ -92,6 +94,14 @@ class TidalApi @Inject constructor(
 
     suspend fun searchArtists(query: String): List<Artist> {
         return tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
+    }
+
+    /** Some instances (e.g. monochrome-api.samidy.com) return track search as a flat `data.items` array instead of `data.tracks.items`. */
+    private suspend fun trackResults(block: suspend (TidalApiService) -> ApiResponse<SearchData>): List<Track> {
+        val data = tryInstances(block).data
+        val nested = data?.tracks?.items
+        if (!nested.isNullOrEmpty()) return nested.map { it.toTrack() }
+        return data?.items.orEmpty().map { it.toTrack() }
     }
 
     suspend fun getAlbum(albumId: String): Pair<Album, List<Track>> {

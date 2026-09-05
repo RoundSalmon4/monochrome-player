@@ -15,7 +15,8 @@ data class SearchData(
     val artists: PaginatedItems<ArtistItem>? = null,
     val albums: PaginatedItems<AlbumItem>? = null,
     val playlists: PaginatedItems<PlaylistItem>? = null,
-    val videos: PaginatedItems<TrackItem>? = null
+    val videos: PaginatedItems<TrackItem>? = null,
+    val items: List<TrackItem>? = null
 )
 
 data class PaginatedItems<T>(
