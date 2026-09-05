@@ -14,6 +14,7 @@ import kotlinx.coroutines.withTimeout
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
 import com.roundsalmon4.monochrome.core.api.internal.SoundCloudClient
 import com.roundsalmon4.monochrome.core.api.internal.DeezerProxyClient
+import com.roundsalmon4.monochrome.core.api.internal.InternetArchiveClient
 import com.roundsalmon4.monochrome.core.api.internal.QobuzProxyClient
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumItem
 import com.roundsalmon4.monochrome.core.api.internal.dto.AlbumResponseData
@@ -45,6 +46,7 @@ class TidalApi @Inject constructor(
     private val soundCloudClient: SoundCloudClient,
     private val qobuzProxyClient: QobuzProxyClient,
     private val deezerProxyClient: DeezerProxyClient,
+    private val internetArchiveClient: InternetArchiveClient,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -203,12 +205,21 @@ class TidalApi @Inject constructor(
             deezerNotFound = deezerProxyClient.wasNotFound
         }
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound)) }
+        // 2b. Internet Archive: free lossless (FLAC) backup, no sign-up or auth
+        try {
+            val result = withTimeout(remaining()) {
+                internetArchiveClient.getStreamUrl(title = track.title, artist = track.artistName)
+            }
+            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Internet Archive failed: ${e.message}") }
+        val iaNotFound = internetArchiveClient.wasNotFound
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Internet Archive"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound)) }
         // 3. Amazon Music: last resort
         try {
             val url = withTimeout(minOf(12_000L, remaining())) { getAmazonStreamUrl(track.id) }
             if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound))
+        throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound))
     }
 
     private fun trackNotFound(track: Track, notFoundFlags: List<Pair<String, Boolean>>): RuntimeException {
