@@ -14,6 +14,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import com.roundsalmon4.monochrome.core.util.StringUtil
+import java.net.InetAddress
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +29,10 @@ class UnifiedPlaybackClient @Inject constructor(
         private const val API_BASE = "https://music-api.geeked.wtf"
         private const val API_TOKEN = "amp_29b2lIr4mze4tK-P8QDOxfMZ9anCgJ9_uGTUks3nIyo"
         private const val JWT_BUFFER_MS = 60_000L
+        private const val HOST_DEAD_MS = 10 * 60_000L
+
+        /** Post-C&D source allowlist mirrors the upstream unified playback chain. */
+        private val ALLOWED_SOURCES = setOf("legacy", "tidal", "mono", "monochrome")
     }
 
     private val gson = Gson()
@@ -36,6 +41,9 @@ class UnifiedPlaybackClient @Inject constructor(
     @Volatile
     var wasNotFound: Boolean = false
 
+    @Volatile
+    private var hostDeadUntil = 0L
+
     suspend fun getStreamUrl(
         title: String,
         artist: String,
@@ -43,6 +51,10 @@ class UnifiedPlaybackClient @Inject constructor(
         durationMs: Long = 0L
     ): MonochromeStreamResult? {
         wasNotFound = false
+        if (!hostIsUp()) {
+            Log.w(TAG, "Unified Playback host unavailable, skipping")
+            return null
+        }
         val jwt = getValidJwt() ?: run { Log.w(TAG, "No unified JWT"); return null }
 
         val params = buildString {
@@ -102,6 +114,13 @@ class UnifiedPlaybackClient @Inject constructor(
         val mimeType = resource["mime_type"]?.toString() ?: "audio/flac"
         val source = resource["source"]?.toString() ?: envelope["selected_source"]?.toString() ?: "unified"
 
+        val normalizedSource = source.lowercase()
+        if (normalizedSource !in ALLOWED_SOURCES) {
+            Log.w(TAG, "Unified Playback selected an unsupported source: $source")
+            return null
+        }
+        val provider = if (normalizedSource == "mono") "monochrome" else normalizedSource
+
         // Verify the returned track matches what we asked for (prevents wrong-track from label metadata errors)
         val returnedTrack = envelope["track"] as? Map<*, *>
         val returnedIsrc = returnedTrack?.get("isrc")?.toString() ?: ""
@@ -116,49 +135,29 @@ class UnifiedPlaybackClient @Inject constructor(
         }
 
         if (delivery == "direct" || !isManifestUrl(resourceUrl, delivery, mimeType)) {
-            Log.d(TAG, "Unified Playback: direct stream from $source")
+            Log.d(TAG, "Unified Playback: direct stream from $provider")
             return MonochromeStreamResult(url = resourceUrl, mimeType = mimeType)
         }
 
-        val asin = (envelope["track"] as? Map<*, *>)?.get("id")?.toString()
-            ?: run { Log.w(TAG, "Unified Playback: manifest but no ASIN"); return null }
-        Log.d(TAG, "Unified Playback: manifest from $source, trying server-side decrypt (asin=$asin)")
-        return getDecryptedStream(asin)
-    }
-
-    private suspend fun getDecryptedStream(asin: String): MonochromeStreamResult? {
-        val request = Request.Builder()
-            .url("$API_BASE/api/stream/$asin/decrypt?quality=HD")
-            .header("Authorization", "Bearer $API_TOKEN")
-            .header("Accept", "application/json")
-            .build()
-        return withContext(Dispatchers.IO) {
-            okHttpClient.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) {
-                    Log.w(TAG, "Unified Playback decrypt: HTTP ${resp.code}")
-                    return@use null
-                }
-                val body = resp.body?.string()
-                val data = body?.let {
-                    runCatching {
-                        gson.fromJson<Map<String, Any?>>(it, object : TypeToken<Map<String, Any?>>() {}.type)
-                    }.getOrNull()
-                }
-                val url = data?.get("url")?.toString()?.takeIf { it.isNotBlank() }
-                if (url != null) {
-                    Log.d(TAG, "Unified Playback: got decrypted stream")
-                    return@use MonochromeStreamResult(url = url, mimeType = data["mime_type"]?.toString() ?: "audio/flac")
-                }
-                Log.w(TAG, "Unified Playback decrypt: no url in response (${body?.take(200)})")
-                null
-            }
-        }
+        Log.d(TAG, "Unified Playback: $delivery manifest from $provider (passing through)")
+        return MonochromeStreamResult(url = resourceUrl, mimeType = mimeType)
     }
 
     private fun isManifestUrl(url: String, delivery: String, mimeType: String): Boolean =
         delivery == "dash" || delivery == "hls" ||
             mimeType.contains("dash") || mimeType.contains("mpegurl") ||
             url.contains(".mpd") || url.contains(".m3u8")
+
+    /** Quick DNS check that fails fast when the host is down, caching the result for HOST_DEAD_MS. */
+    private suspend fun hostIsUp(): Boolean {
+        if (System.currentTimeMillis() < hostDeadUntil) return false
+        val host = android.net.Uri.parse(API_BASE).host ?: return false
+        val alive = try {
+            withContext(Dispatchers.IO) { InetAddress.getByName(host); true }
+        } catch (_: Exception) { false }
+        if (!alive) hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
+        return alive
+    }
 
     private suspend fun getValidJwt(): String? {
         val (cached, expiry) = prefs.getUnifiedJwt() ?: Pair("", 0L)
