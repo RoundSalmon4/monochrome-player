@@ -53,6 +53,11 @@ then walks this chain until one returns a playable URL:
    on a cooldown.
 4. **Deezer** (`DeezerProxyClient`) — community proxy, ISRC lookup.
 5. **Internet Archive** — free, no sign-up lossless FLAC fallback.
+6. **JioSaavn** (`JioSaavnClient`) — free AAC 320 fallback; the 320 kbps
+   link is delivered as a DES-encrypted template in the search response and
+   decrypted locally. Conservative title/artist/duration matching gates the
+   result.
+7. **Amazon Music** — last resort stream lookup.
 
 Dead hosts are remembered for a few minutes so a down proxy cannot stall the
 chain. Each source surfaces which failures it hit, so an unplayable track names
@@ -86,6 +91,28 @@ SDK is required locally; CI produces the installable artifact.
 Install the APK and disable battery optimization for ChromePlayer (Settings ->
 Apps -> ChromePlayer -> Battery -> Unrestricted) for reliable background
 playback and fast stream start times.
+
+## Credits
+
+ChromePlayer reuses patterns and data sources from the open-source community.
+In particular:
+
+- **[Monochrome](https://github.com/monochrome-music/monochrome)** — streaming
+  API conventions, unified playback design, and the metadata instance pool we
+  build on (analysed as upstream; ChromePlayer is its own independent client).
+- **[Meld](https://github.com/FrancescoGrazioso/Meld) / Metrolist** — the
+  multi-backend Qobuz resolver architecture (backend rotation, host/captcha
+  cooldowns, quality ladder) ported into `QobuzProxyClient`.
+- **[Stash](https://github.com/rawnaldclark/Stash)** — reference for the
+  JioSaavn DES-encrypted media template (the `_96` -> `_320` remap) and the
+  conservative matcher in `JioSaavnClient`.
+- **Media3 / ExoPlayer**, **Retrofit + OkHttp**, **Hilt**, **Room**,
+  **DataStore** — the app's playback and data stack.
+- The community instance operators and stream relays whose services the app
+  consumes. They can change or vanish at any time; ChromePlayer tries to route
+  around that.
+
+Big thanks to everyone maintaining these projects.
 
 ## Disclaimer
 
