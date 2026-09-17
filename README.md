@@ -84,9 +84,10 @@ Built from scratch in Kotlin with Jetpack Compose:
 ./gradlew assembleRelease
 ```
 
-A debug-signed release APK is produced per run in
-`app/build/outputs/apk/release/` from CI workflow `assembleRelease`. No Android
-SDK is required locally; CI produces the installable artifact.
+A **debug** APK is built automatically for every push that touches app code
+(uploaded as the `ChromePlayer-debug` artifact). Run the **Build** workflow
+manually to build a release APK instead. No Android SDK is required locally; CI
+produces the installable artifact.
 
 Install the APK and disable battery optimization for ChromePlayer (Settings ->
 Apps -> ChromePlayer -> Battery -> Unrestricted) for reliable background

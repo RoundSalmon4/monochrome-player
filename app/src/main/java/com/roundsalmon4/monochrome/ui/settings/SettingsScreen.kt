@@ -74,7 +74,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onCreditsClick: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
     val showClearHistoryDialog by viewModel.showClearHistoryDialog.collectAsState()
     val showClearPlaylistsDialog by viewModel.showClearPlaylistsDialog.collectAsState()
@@ -99,7 +102,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             AmazonSection(viewModel)
             AppearanceSection(uiState, viewModel)
             DataSection(viewModel, exportResult, importResult)
-            AboutSection()
+AboutSection(onCreditsClick = onCreditsClick)
 
             val context = LocalContext.current
             val versionName = remember {
@@ -363,9 +366,8 @@ private fun DataSection(viewModel: SettingsViewModel, exportResult: String?, imp
 }
 
 @Composable
-private fun AboutSection() {
+private fun AboutSection(onCreditsClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
-    var showCredits by remember { mutableStateOf(false) }
 
     Column {
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
@@ -378,86 +380,11 @@ private fun AboutSection() {
             trailingContent = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) }
         )
         ListItem(
-            modifier = Modifier.clickable { showCredits = true },
+            modifier = Modifier.clickable { onCreditsClick() },
             headlineContent = { Text("Credits & Licenses", fontWeight = FontWeight.SemiBold) },
             supportingContent = { Text("Third-party projects and libraries used by ChromePlayer") },
             trailingContent = { Icon(Icons.Filled.Info, contentDescription = null) }
         )
-    }
-
-    if (showCredits) {
-        AlertDialog(
-            onDismissRequest = { showCredits = false },
-            confirmButton = { TextButton(onClick = { showCredits = false }) { Text("Close") } },
-            title = { Text("Credits & Licenses") },
-            text = {
-                Column(
-                    Modifier
-                        .verticalScroll(rememberScrollState())
-                        .padding(top = 4.dp)
-                ) {
-                    CreditsEntry(
-                        "Monochrome",
-                        "Streaming API conventions, unified playback design, and the community metadata instance pool ChromePlayer builds on.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Meld (fork of Metrolist)",
-                        "Multi-backend Qobuz resolver architecture - backend rotation, host/captcha cooldowns and quality ladder - ported into the Qobuz playback client.",
-                        "GPL-3.0 (port; included as derivative work)"
-                    )
-                    CreditsEntry(
-                        "Stash",
-                        "Reference for the JioSaavn DES-decrypted media template (_96 to _320 remap) and the conservative track matcher used by the JioSaavn fallback.",
-                        "GPL-3.0 (pattern ported)"
-                    )
-                    CreditsEntry(
-                        "Media3 / ExoPlayer",
-                        "Audio playback engine.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Retrofit + OkHttp + Gson",
-                        "Networking and JSON parsing.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Hilt / Dagger",
-                        "Dependency injection.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Room + DataStore",
-                        "Persistence and preferences.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Coil",
-                        "Image loading.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Coroutines",
-                        "Concurrency.",
-                        "Apache License 2.0"
-                    )
-                    CreditsEntry(
-                        "Community instances & relays",
-                        "The community-hosted metadata mirrors and stream resolvers ChromePlayer may rely on. They can change or go offline at any time.",
-                        "Not affiliated"
-                    )
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun CreditsEntry(name: String, description: String, license: String) {
-    Column(Modifier.padding(bottom = 12.dp)) {
-        Text(name, fontWeight = FontWeight.SemiBold)
-        Text(description, style = MaterialTheme.typography.bodyMedium)
-        Text(license, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 

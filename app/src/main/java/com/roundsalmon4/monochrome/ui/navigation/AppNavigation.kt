@@ -39,6 +39,7 @@ import com.roundsalmon4.monochrome.ui.library.LibraryScreen
 import com.roundsalmon4.monochrome.ui.library.playlist.PlaylistDetailScreen
 import com.roundsalmon4.monochrome.ui.player.PlayerScreen
 import com.roundsalmon4.monochrome.ui.search.SearchScreen
+import com.roundsalmon4.monochrome.ui.settings.CreditsScreen
 import com.roundsalmon4.monochrome.ui.settings.SettingsScreen
 
 data class BottomNavItem(val label: String, val icon: ImageVector, val route: Route)
@@ -208,7 +209,13 @@ fun AppNavigation(
                 }
 
                 composable<Route.Settings> {
-                    SettingsScreen()
+                    SettingsScreen(
+                        onCreditsClick = { navController.navigate(Route.Credits) }
+                    )
+                }
+
+                composable<Route.Credits> {
+                    CreditsScreen(onBackClick = { navController.popBackStack() })
                 }
             }
         }

@@ -3,18 +3,26 @@ name: Build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.github/**'
   workflow_dispatch:
     inputs:
       build-type:
         description: "Which APK variant to build"
         type: choice
         required: true
-        default: release
+        default: debug
         options:
-          - release
           - debug
+          - release
       upload-artifact:
         description: "Upload the APK as a build artifact"
         type: boolean
@@ -40,9 +48,9 @@ jobs:
         id: variant
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "variant=${{ github.event.inputs.build-type || 'release' }}" >> "$GITHUB_OUTPUT"
+            echo "variant=${{ github.event.inputs.build-type || 'debug' }}" >> "$GITHUB_OUTPUT"
           else
-            echo "variant=release" >> "$GITHUB_OUTPUT"
+            echo "variant=debug" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build APK
