@@ -378,9 +378,7 @@ class TidalApi @Inject constructor(
         if (cover.isNullOrBlank()) return ""
         if (cover.startsWith("http")) return cover
         val path = cover.replace("-", "/")
-        val result = "https://resources.tidal.com/images/$path/640x640.jpg"
-        android.util.Log.v("ChromePlayer", "Cover URL: $result")
-        return result
+        return "https://resources.tidal.com/images/$path/640x640.jpg"
     }
 
     private fun artistPictureUrl(picture: String?): String {

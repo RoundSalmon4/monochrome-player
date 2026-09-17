@@ -25,9 +25,15 @@ class InternetArchiveClient @Inject constructor(
         private const val SEARCH_URL = "https://archive.org/advancedsearch.php"
         private const val METADATA_URL = "https://archive.org/metadata/"
         private const val DOWNLOAD_URL = "https://archive.org/download/"
-        private const val MAX_ITEMS = 4
+        private const val MAX_ITEMS = 3
         private const val MAX_FILES = 40
     }
+
+    private val client: OkHttpClient = okHttpClient.newBuilder()
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+        .callTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     private val gson = Gson()
 
@@ -168,7 +174,7 @@ class InternetArchiveClient @Inject constructor(
             val request = Request.Builder().url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
                 .build()
-            withContext(Dispatchers.IO) { okHttpClient.newCall(request).execute() }.use {
+            withContext(Dispatchers.IO) { client.newCall(request).execute() }.use {
                 if (!it.isSuccessful) {
                     Log.w(TAG, "Internet Archive: HTTP ${it.code} for $url")
                     null

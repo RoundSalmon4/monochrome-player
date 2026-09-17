@@ -18,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
+import java.net.InetAddress
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -38,6 +39,7 @@ class AmazonMusicClient @Inject constructor(
         private const val TAG = "ChromePlayer-Amazon"
         private const val API_BASE = "https://amz.geeked.wtf"
         private const val TURNSTILE_SITE_KEY = "0x4AAAAAADgxqF6QVMm0GLHH"
+        private const val HOST_DEAD_MS = 5 * 60 * 1000L
         private val CHROME_UA = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
     }
 
@@ -45,6 +47,9 @@ class AmazonMusicClient @Inject constructor(
     private var cachedJwt: String? = null
     private var jwtExpiry: Long = 0L
     private var bypassToken: String? = null
+
+    @Volatile
+    private var hostDeadUntil = 0L
 
     fun setJwt(jwt: String, expiresAt: Long) {
         cachedJwt = jwt; jwtExpiry = expiresAt
@@ -55,6 +60,10 @@ class AmazonMusicClient @Inject constructor(
 
     suspend fun getStreamUrl(trackId: String): AmazonStreamResult? {
         Log.d(TAG, "getStreamUrl: track=$trackId")
+        if (!hostIsUp()) {
+            Log.w(TAG, "API host unavailable, skipping (dead-domain fast fail)")
+            return null
+        }
         val jwt = resolveJwt() ?: run { Log.w(TAG, "No JWT available"); return null }
         Log.d(TAG, "JWT valid, calling API for track $trackId")
         val req = okhttp3.Request.Builder()
@@ -64,7 +73,11 @@ class AmazonMusicClient @Inject constructor(
         return withContext(Dispatchers.IO) {
             okHttpClient.newCall(req).execute().use { resp ->
                 if (resp.code == 401 || resp.code == 428) { cachedJwt = null; Log.w(TAG, "JWT rejected (${resp.code})"); return@use null }
-                if (!resp.isSuccessful) { Log.w(TAG, "Amazon: HTTP ${resp.code}"); return@use null }
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "Amazon: HTTP ${resp.code}")
+                    if (resp.code in 500..599) hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
+                    return@use null
+                }
 
                 val raw = gson.fromJson(resp.body?.string(), Map::class.java)
                 val data = (raw["data"] as? Map<*, *>) ?: (raw["track"] as? Map<*, *>) ?: raw
@@ -200,5 +213,24 @@ function onLoad(){
 
     private fun postCleanup(wv: WebView, action: () -> Unit = {}) {
         Handler(Looper.getMainLooper()).post { action(); wv.destroy() }
+    }
+
+    /** Cheap DNS preflight so a dead API domain fails fast instead of stalling a 20s Turnstile. */
+    private suspend fun hostIsUp(): Boolean {
+        if (System.currentTimeMillis() < hostDeadUntil) return false
+        val host = API_BASE.removePrefix("https://").removePrefix("http://").substringBefore('/')
+        val alive = try {
+            withContext(Dispatchers.IO) {
+                InetAddress.getByName(host)
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+        if (!alive) {
+            hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
+            Log.w(TAG, "Host $host marked down for ${HOST_DEAD_MS / 60_000}min")
+        }
+        return alive
     }
 }
