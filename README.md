@@ -92,28 +92,6 @@ Install the APK and disable battery optimization for ChromePlayer (Settings ->
 Apps -> ChromePlayer -> Battery -> Unrestricted) for reliable background
 playback and fast stream start times.
 
-## Credits
-
-ChromePlayer reuses patterns and data sources from the open-source community.
-In particular:
-
-- **[Monochrome](https://github.com/monochrome-music/monochrome)** — streaming
-  API conventions, unified playback design, and the metadata instance pool we
-  build on (analysed as upstream; ChromePlayer is its own independent client).
-- **[Meld](https://github.com/FrancescoGrazioso/Meld) / Metrolist** — the
-  multi-backend Qobuz resolver architecture (backend rotation, host/captcha
-  cooldowns, quality ladder) ported into `QobuzProxyClient`.
-- **[Stash](https://github.com/rawnaldclark/Stash)** — reference for the
-  JioSaavn DES-encrypted media template (the `_96` -> `_320` remap) and the
-  conservative matcher in `JioSaavnClient`.
-- **Media3 / ExoPlayer**, **Retrofit + OkHttp**, **Hilt**, **Room**,
-  **DataStore** — the app's playback and data stack.
-- The community instance operators and stream relays whose services the app
-  consumes. They can change or vanish at any time; ChromePlayer tries to route
-  around that.
-
-Big thanks to everyone maintaining these projects.
-
 ## Disclaimer
 
 This project is an independent, unofficial client. It is not affiliated with

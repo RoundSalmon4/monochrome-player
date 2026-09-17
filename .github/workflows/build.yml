@@ -6,6 +6,20 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build-type:
+        description: "Which APK variant to build"
+        type: choice
+        required: true
+        default: release
+        options:
+          - release
+          - debug
+      upload-artifact:
+        description: "Upload the APK as a build artifact"
+        type: boolean
+        required: false
+        default: true
 
 jobs:
   build:
@@ -22,12 +36,30 @@ jobs:
         with:
           validate-wrappers: false
 
-      - name: Build release APK
-        run: chmod +x gradlew && ./gradlew assembleRelease
+      - name: Determine build variant
+        id: variant
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "variant=${{ github.event.inputs.build-type || 'release' }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "variant=release" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build APK
+        env:
+          VARIANT: ${{ steps.variant.outputs.variant }}
+        run: |
+          chmod +x gradlew
+          if [ "$VARIANT" = "debug" ]; then
+            ./gradlew assembleDebug
+          else
+            ./gradlew assembleRelease
+          fi
 
       - name: Upload APK
+        if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.upload-artifact == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ChromePlayer
-          path: app/build/outputs/apk/release/*.apk
+          name: ChromePlayer-${{ steps.variant.outputs.variant }}
+          path: app/build/outputs/apk/${{ steps.variant.outputs.variant }}/*.apk
           if-no-files-found: error
