@@ -54,14 +54,16 @@ class AmazonMusicClient @Inject constructor(
     fun setBypassToken(token: String) { bypassToken = token; Log.d(TAG, "Bypass token set") }
 
     suspend fun getStreamUrl(trackId: String): AmazonStreamResult? {
-        val jwt = resolveJwt() ?: run { Log.w(TAG, "No JWT"); return null }
+        Log.d(TAG, "getStreamUrl: track=$trackId")
+        val jwt = resolveJwt() ?: run { Log.w(TAG, "No JWT available"); return null }
+        Log.d(TAG, "JWT valid, calling API for track $trackId")
         val req = okhttp3.Request.Builder()
             .url("$API_BASE/api/track/?id=$trackId&quality=HD")
             .header("X-Turnstile-JWT", jwt)
             .build()
         return withContext(Dispatchers.IO) {
             okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.code == 401 || resp.code == 428) { cachedJwt = null; Log.w(TAG, "JWT rejected"); return@use null }
+                if (resp.code == 401 || resp.code == 428) { cachedJwt = null; Log.w(TAG, "JWT rejected (${resp.code})"); return@use null }
                 if (!resp.isSuccessful) { Log.w(TAG, "Amazon: HTTP ${resp.code}"); return@use null }
 
                 val raw = gson.fromJson(resp.body?.string(), Map::class.java)
@@ -79,22 +81,32 @@ class AmazonMusicClient @Inject constructor(
 
     private suspend fun resolveJwt(): String? {
         // 1. Use cached JWT if still valid
-        if (cachedJwt != null && System.currentTimeMillis() < jwtExpiry) return cachedJwt
+        if (cachedJwt != null && System.currentTimeMillis() < jwtExpiry) {
+            Log.d(TAG, "Using cached JWT")
+            return cachedJwt
+        }
 
         // 2. Try bypass token
         if (bypassToken != null) {
+            Log.d(TAG, "Trying bypass token")
             val jwt = exchangeBypassForJwt(bypassToken!!)
             if (jwt != null) { cachedJwt = jwt; jwtExpiry = System.currentTimeMillis() + 55 * 60 * 1000L; return jwt }
+            Log.w(TAG, "Bypass token failed to produce JWT")
         }
 
         // 3. Try WebView-based Turnstile
         try {
+            Log.d(TAG, "Launching WebView Turnstile")
             val token = withTimeout(20000L) { runTurnstile() }
             if (token != null) {
                 val jwt = exchangeTokenForJwt(token)
                 if (jwt != null) { cachedJwt = jwt; jwtExpiry = System.currentTimeMillis() + 55 * 60 * 1000L; return jwt }
+                Log.w(TAG, "Token exchange failed")
+            } else {
+                Log.w(TAG, "Turnstile returned no token")
             }
         } catch (_: TimeoutCancellationException) { Log.w(TAG, "Turnstile timed out") }
+        Log.w(TAG, "No JWT available (all methods failed)")
         return null
     }
 

@@ -83,6 +83,7 @@ class JioSaavnClient @Inject constructor(
         for (query in queries) {
             val songs = search(query) ?: continue
             if (songs.isNotEmpty()) anySearchOk = true
+            Log.d(TAG, "Search '$query' -> ${songs.size} 320-capable results")
             val match = bestMatch(songs, title, artist, album, durationMs) ?: continue
             val url = match.link320 ?: continue
             if (probe(url)) {
@@ -177,19 +178,31 @@ class JioSaavnClient @Inject constructor(
 
         for (song in songs) {
             val candidateMarkers = versionMarkers(song.name)
-            if ((candidateMarkers - wantedMarkers).isNotEmpty()) continue
+            if ((candidateMarkers - wantedMarkers).isNotEmpty()) {
+                Log.d(TAG, "Reject '${song.name}': version markers ${candidateMarkers - wantedMarkers}")
+                continue
+            }
 
             val candidateTitle = normalize(stripParens(song.name))
             val titleSim = jaccardCore(wantedTitle, candidateTitle)
-            if (titleSim < 0.5) continue
+            if (titleSim < 0.5) {
+                Log.d(TAG, "Reject '${song.name}': title sim $titleSim < 0.5")
+                continue
+            }
 
             val candidateArtist = normalize(song.artists)
             val artistSim = artistScore(wantedArtist, candidateArtist)
-            if (artistSim < 0.6) continue
+            if (artistSim < 0.6) {
+                Log.d(TAG, "Reject '${song.name}': artist sim $artistSim < 0.6")
+                continue
+            }
 
             if (wantedDurationSec != null && song.durationSec != null &&
                 abs(wantedDurationSec - song.durationSec) > minDurationTolerance
-            ) continue
+            ) {
+                Log.d(TAG, "Reject '${song.name}': duration ${song.durationSec}s vs ${wantedDurationSec}s")
+                continue
+            }
 
             var score = titleSim + artistSim
             if (wantedAlbum.isNotBlank() && song.album.isNotBlank()) {

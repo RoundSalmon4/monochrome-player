@@ -155,8 +155,14 @@ class PlayerViewModel @Inject constructor(
     private fun playTrack(track: Track) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            val playStart = System.currentTimeMillis()
+            Log.i("ChromePlayer-Player", "playTrack: '${track.title}' - ${track.artistName} (id=${track.id})")
             try {
                 val streamUrl = tidalApi.getTrackStreamUrl(track)
+                Log.i(
+                    "ChromePlayer-Player",
+                    "Stream resolved in ${System.currentTimeMillis() - playStart}ms: mime=${streamUrl.mimeType} url=${streamUrl.url.take(140)}"
+                )
                 val saved = historyDao.getById(track.id)
                 val resumeMs = if (saved != null && saved.positionMs in 1 until (track.durationMs - RESUME_SKIP_END_MS))
                     saved.positionMs else 0L

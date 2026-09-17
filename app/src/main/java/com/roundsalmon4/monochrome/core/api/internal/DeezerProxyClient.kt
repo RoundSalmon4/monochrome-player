@@ -61,7 +61,10 @@ class DeezerProxyClient @Inject constructor(
                 .build()
             withContext(Dispatchers.IO) {
                 proxyClient.newCall(req).execute().use { resp ->
-                    Log.d(TAG, "GET: HTTP ${resp.code}")
+                    val code = resp.code
+                    val bodySnippet = resp.body?.string()?.take(120).orEmpty()
+                    Log.d(TAG, "GET: HTTP $code")
+                    if (bodySnippet.isNotBlank()) Log.d(TAG, "Deezer response: $bodySnippet")
                     resp.isSuccessful
                 }
             }
@@ -71,6 +74,7 @@ class DeezerProxyClient @Inject constructor(
         }
         if (getResult) return url
 
+        Log.w(TAG, "Deezer: not available (HEAD/GET failed) for ISRC=$isrc")
         wasNotFound = true
         return null
     }

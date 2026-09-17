@@ -73,6 +73,13 @@ class TidalApi @Inject constructor(
         throw errors.last()
     }
 
+    private fun logResolved(source: String, chainStart: Long, url: String, mimeType: String) {
+        android.util.Log.i(
+            "ChromePlayer-TidalApi",
+            "Resolved via $source in ${System.currentTimeMillis() - chainStart}ms -> $url ($mimeType)"
+        )
+    }
+
     suspend fun search(query: String): SearchResults = coroutineScope {
         val tracksDef = async { trackResults { it.searchTracks(query) } }
         val artistsDef = async { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
@@ -150,6 +157,10 @@ class TidalApi @Inject constructor(
     suspend fun getTrackStreamUrl(track: Track): StreamUrl {
         val chainStart = System.currentTimeMillis()
         val maxChainMs = 30_000L
+        android.util.Log.i(
+            "ChromePlayer-TidalApi",
+            "getTrackStreamUrl start: '${track.title}' - ${track.artistName} (id=${track.id}, isrc=${track.isrc})"
+        )
         fun elapsed(): Boolean = System.currentTimeMillis() - chainStart > maxChainMs
 
         fun remaining(): Long = maxOf(1_000L, maxChainMs - (System.currentTimeMillis() - chainStart))
@@ -164,7 +175,10 @@ class TidalApi @Inject constructor(
                     isrc = track.isrc, durationMs = track.durationMs
                 )
             }
-            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+            if (result != null) {
+                logResolved("Monochrome", chainStart, result.url, result.mimeType)
+                return StreamUrl(url = result.url, mimeType = result.mimeType)
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
         val monoNotFound = monochromePlaybackClient.wasNotFound
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound)) }
@@ -176,7 +190,10 @@ class TidalApi @Inject constructor(
                     isrc = track.isrc, durationMs = track.durationMs
                 )
             }
-            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+            if (result != null) {
+                logResolved("Unified", chainStart, result.url, result.mimeType)
+                return StreamUrl(url = result.url, mimeType = result.mimeType)
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Unified Playback failed: ${e.message}") }
         val unifiedNotFound = unifiedPlaybackClient.wasNotFound
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Unified"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound)) }
@@ -185,7 +202,10 @@ class TidalApi @Inject constructor(
             val result = withTimeout(remaining()) {
                 soundCloudClient.getStreamUrl(title = track.title, artist = track.artistName)
             }
-            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+            if (result != null) {
+                logResolved("SoundCloud", chainStart, result.url, result.mimeType)
+                return StreamUrl(url = result.url, mimeType = result.mimeType)
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "SoundCloud failed: ${e.message}") }
         val scNotFound = soundCloudClient.wasNotFound
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound)) }
@@ -203,14 +223,20 @@ class TidalApi @Inject constructor(
                         durationMs = track.durationMs
                     )
                 }
-                if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
+                if (url != null) {
+                    logResolved("Qobuz", chainStart, url, "audio/flac")
+                    return StreamUrl(url = url, mimeType = "audio/flac")
+                }
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
             qobuzNotFound = qobuzProxyClient.wasNotFound
             if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound)) }
             // 2. Deezer: backup
             try {
                 val url = withTimeout(remaining()) { deezerProxyClient.getStreamUrl(track.isrc) }
-                if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
+                if (url != null) {
+                    logResolved("Deezer", chainStart, url, "audio/mp4")
+                    return StreamUrl(url = url, mimeType = "audio/mp4")
+                }
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
             deezerNotFound = deezerProxyClient.wasNotFound
         }
@@ -220,7 +246,10 @@ class TidalApi @Inject constructor(
             val result = withTimeout(remaining()) {
                 internetArchiveClient.getStreamUrl(title = track.title, artist = track.artistName)
             }
-            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+            if (result != null) {
+                logResolved("InternetArchive", chainStart, result.url, result.mimeType)
+                return StreamUrl(url = result.url, mimeType = result.mimeType)
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Internet Archive failed: ${e.message}") }
         val iaNotFound = internetArchiveClient.wasNotFound
         if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Internet Archive"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound)) }
@@ -234,18 +263,31 @@ class TidalApi @Inject constructor(
                     durationMs = track.durationMs
                 )
             }
-            if (result != null) return StreamUrl(url = result.url, mimeType = result.mimeType)
+            if (result != null) {
+                logResolved("JioSaavn", chainStart, result.url, result.mimeType)
+                return StreamUrl(url = result.url, mimeType = result.mimeType)
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "JioSaavn failed: ${e.message}") }
         val jioSaavnNotFound = jioSaavnClient.wasNotFound
         // 3. Amazon Music: last resort
         try {
             val url = withTimeout(minOf(12_000L, remaining())) { getAmazonStreamUrl(track.id) }
-            if (url != null) return StreamUrl(url = url, mimeType = "audio/mp4")
+            if (url != null) {
+                logResolved("Amazon", chainStart, url, "audio/mp4")
+                return StreamUrl(url = url, mimeType = "audio/mp4")
+            }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
         throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound, "JioSaavn" to jioSaavnNotFound))
     }
 
     private fun trackNotFound(track: Track, notFoundFlags: List<Pair<String, Boolean>>): RuntimeException {
+        val status = notFoundFlags.joinToString { (name, nf) ->
+            "$name=${if (nf) "not-found" else "unavailable/down"}"
+        }
+        android.util.Log.e(
+            "ChromePlayer-TidalApi",
+            "Track resolution failed: '${track.title}' - ${track.artistName} (id=${track.id}, isrc=${track.isrc}) | $status"
+        )
         val sources = notFoundFlags.filter { it.second }.map { it.first }
         val msg = if (sources.isNotEmpty()) {
             "Track unavailable on ${sources.joinToString(", ")} and all fallbacks exhausted: ${track.title} - ${track.artistName}"

@@ -42,6 +42,7 @@ class InternetArchiveClient @Inject constructor(
         if (title.isBlank()) return null
 
         val identifiers = searchIdentifiers(title, artist)
+        Log.d(TAG, "Internet Archive: ${identifiers.size} candidate item(s) for '$title' - $artist")
         if (identifiers.isEmpty()) {
             Log.d(TAG, "Internet Archive: no items for '$title' - $artist")
             wasNotFound = true

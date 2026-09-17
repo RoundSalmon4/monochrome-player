@@ -32,6 +32,7 @@ class PlayerEngineController(
 ) {
 
     companion object {
+        private const val TAG = "ChromePlayer-ExoPlayer"
         private const val POSITION_TICK_INTERVAL_MS = 500L
     }
 
@@ -67,11 +68,18 @@ class PlayerEngineController(
         override fun onIsPlayingChanged(isPlaying: Boolean) { updateSnapshot() }
         override fun onPlaybackStateChanged(state: Int) {
             prevPlaybackState = state
+            when (state) {
+                Player.STATE_IDLE -> Log.d(TAG, "state=IDLE")
+                Player.STATE_BUFFERING -> Log.d(TAG, "state=BUFFERING")
+                Player.STATE_READY -> Log.d(TAG, "state=READY")
+                Player.STATE_ENDED -> Log.d(TAG, "state=ENDED")
+            }
             updateSnapshot()
         }
         override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) { updateSnapshot() }
         override fun onPositionDiscontinuity(reason: Int) { updateSnapshot() }
         override fun onPlayerError(error: PlaybackException) {
+            Log.e(TAG, "onPlayerError ${error.errorCodeName}: ${error.message}", error)
             val cause = error.cause
             val causeMsg = cause?.message?.takeIf { it.isNotBlank() }
             playbackError = buildString {
@@ -112,6 +120,7 @@ class PlayerEngineController(
         artworkUrl: String = ""
     ) {
         playbackError = null
+        Log.i(TAG, "play(url=${url.take(140)}, mime=$mimeType, start=$startPositionMs, title=$title)")
         val builder = MediaItem.Builder().setUri(url)
         mimeType?.let { builder.setMimeType(it) }
         val metadataBuilder = MediaMetadata.Builder()
