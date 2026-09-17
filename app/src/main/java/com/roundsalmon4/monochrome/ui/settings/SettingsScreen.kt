@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,6 +38,7 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -102,7 +104,8 @@ fun SettingsScreen(
             AmazonSection(viewModel)
             AppearanceSection(uiState, viewModel)
             DataSection(viewModel, exportResult, importResult)
-AboutSection(onCreditsClick = onCreditsClick)
+            BackendsSection()
+            AboutSection(onCreditsClick = onCreditsClick)
 
             val context = LocalContext.current
             val versionName = remember {
@@ -363,6 +366,70 @@ private fun DataSection(viewModel: SettingsViewModel, exportResult: String?, imp
             supportingContent = { Text("Delete all playlists and their tracks") }
         )
     }
+}
+
+@Composable
+private fun BackendsSection(viewModel: BackendStatusViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    Column {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        SettingsCategory("Backends")
+
+        ListItem(
+            headlineContent = { Text("Endpoint status", fontWeight = FontWeight.SemiBold) },
+            supportingContent = {
+                val up = uiState.results.values.count { it.up }
+                val total = viewModel.targets.size
+                Text(if (uiState.checking) "Checking... ($up/$total up)" else "$up/$total reachable")
+            },
+            trailingContent = {
+                IconButton(onClick = { viewModel.refresh() }, enabled = !uiState.checking) {
+                    Icon(Icons.Filled.Refresh, contentDescription = "Re-check backends")
+                }
+            }
+        )
+
+        val groups = viewModel.targets.map { it.group }.distinct()
+        for (group in groups) {
+            Text(
+                text = group,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp)
+            )
+            for (target in viewModel.targets.filter { it.group == group }) {
+                val result = uiState.results[target.name]
+                EndpointRow(
+                    name = target.name,
+                    detail = result?.detail ?: if (uiState.checking) "checking..." else "unknown",
+                    up = result?.up
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EndpointRow(name: String, detail: String, up: Boolean?) {
+    val dotColor = when {
+        up == true -> Color(0xFF2E7D32)
+        up == false -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outline
+    }
+    ListItem(
+        leadingContent = {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(dotColor, CircleShape)
+            )
+        },
+        headlineContent = { Text(name, style = MaterialTheme.typography.bodyMedium) },
+        supportingContent = {
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    )
 }
 
 @Composable
