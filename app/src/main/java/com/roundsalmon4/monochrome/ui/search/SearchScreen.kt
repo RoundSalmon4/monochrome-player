@@ -32,9 +32,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.roundsalmon4.monochrome.core.api.Availability
 import com.roundsalmon4.monochrome.core.api.model.Album
 import com.roundsalmon4.monochrome.core.api.model.Artist
 import com.roundsalmon4.monochrome.core.api.model.Track
+import com.roundsalmon4.monochrome.ui.common.AlbumAvailabilityViewModel
+import com.roundsalmon4.monochrome.ui.common.AlbumStatusDot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,9 +45,11 @@ fun SearchScreen(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
     onTrackClick: (List<Track>, Int) -> Unit,
-    viewModel: SearchViewModel = hiltViewModel()
+    viewModel: SearchViewModel = hiltViewModel(),
+    availabilityViewModel: AlbumAvailabilityViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         TextField(
@@ -104,6 +109,9 @@ fun SearchScreen(
                                 leadingContent = {
                                     AsyncImage(model = album.coverUrl, contentDescription = null,
                                         modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)
+                                },
+                                trailingContent = {
+                                    AlbumStatusDot(status = albumStatus[album.id] ?: Availability.UNKNOWN)
                                 },
                                 modifier = Modifier.clickable { onAlbumClick(album.id) }
                             )

@@ -31,16 +31,21 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.roundsalmon4.monochrome.core.api.Availability
 import com.roundsalmon4.monochrome.core.api.model.Album
+import com.roundsalmon4.monochrome.ui.common.AlbumAvailabilityViewModel
+import com.roundsalmon4.monochrome.ui.common.AlbumStatusDot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
-    viewModel: HomeViewModel = hiltViewModel()
+    viewModel: HomeViewModel = hiltViewModel(),
+    availabilityViewModel: AlbumAvailabilityViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(Unit) { viewModel.refresh() }
@@ -72,7 +77,11 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(state.newReleases, key = { it.id }) { album ->
-                            AlbumCard(album = album, onClick = { onAlbumClick(album.id) })
+                            AlbumCard(
+                                album = album,
+                                status = albumStatus[album.id] ?: Availability.UNKNOWN,
+                                onClick = { onAlbumClick(album.id) }
+                            )
                         }
                     }
                 }
@@ -82,17 +91,25 @@ fun HomeScreen(
 }
 
 @Composable
-private fun AlbumCard(album: Album, onClick: () -> Unit) {
+private fun AlbumCard(album: Album, status: Availability, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
     ) {
         Column {
-            AsyncImage(
-                model = album.coverUrl,
-                contentDescription = album.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-                contentScale = ContentScale.Crop
-            )
+            Box {
+                AsyncImage(
+                    model = album.coverUrl,
+                    contentDescription = album.title,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                    contentScale = ContentScale.Crop
+                )
+                AlbumStatusDot(
+                    status = status,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                )
+            }
             Text(
                 text = album.title,
                 style = MaterialTheme.typography.bodyMedium,

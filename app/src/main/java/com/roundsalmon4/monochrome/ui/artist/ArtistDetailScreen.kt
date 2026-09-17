@@ -39,7 +39,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
+import com.roundsalmon4.monochrome.core.api.Availability
 import com.roundsalmon4.monochrome.core.api.model.Album
+import com.roundsalmon4.monochrome.ui.common.AlbumAvailabilityViewModel
+import com.roundsalmon4.monochrome.ui.common.AlbumStatusDot
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,10 +50,12 @@ fun ArtistDetailScreen(
     artistId: String,
     onBackClick: () -> Unit,
     onAlbumClick: (String) -> Unit,
-    viewModel: ArtistDetailViewModel = hiltViewModel()
+    viewModel: ArtistDetailViewModel = hiltViewModel(),
+    availabilityViewModel: AlbumAvailabilityViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val isSubscribed by viewModel.isSubscribed.collectAsStateWithLifecycle()
+    val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
 
     LaunchedEffect(artistId) { viewModel.loadArtist(artistId) }
 
@@ -108,7 +113,11 @@ fun ArtistDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(state.albums, key = { it.id }) { album ->
-                        AlbumCard(album, onClick = { onAlbumClick(album.id) })
+                        AlbumCard(
+                            album,
+                            status = albumStatus[album.id] ?: Availability.UNKNOWN,
+                            onClick = { onAlbumClick(album.id) }
+                        )
                     }
                 }
             }
@@ -117,13 +126,21 @@ fun ArtistDetailScreen(
 }
 
 @Composable
-private fun AlbumCard(album: Album, onClick: () -> Unit) {
+private fun AlbumCard(album: Album, status: Availability, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column {
-            AsyncImage(
-                model = album.coverUrl, contentDescription = album.title,
-                modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop
-            )
+            Box {
+                AsyncImage(
+                    model = album.coverUrl, contentDescription = album.title,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentScale = ContentScale.Crop
+                )
+                AlbumStatusDot(
+                    status = status,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                )
+            }
             Text(album.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
                 overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
             Text(album.artistName, style = MaterialTheme.typography.bodySmall,
