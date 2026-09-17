@@ -43,10 +43,18 @@ object ApiModule {
             level = HttpLoggingInterceptor.Level.BASIC
         }
         val userAgent = Interceptor { chain ->
-            val request = chain.request().newBuilder()
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
-                .build()
-            chain.proceed(request)
+            val request = chain.request()
+            // Respect a User-Agent set explicitly by a client (e.g. SoundCloud's
+            // desktop UA); only apply the default when none is present.
+            if (request.header("User-Agent") != null) {
+                chain.proceed(request)
+            } else {
+                chain.proceed(
+                    request.newBuilder()
+                        .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
+                        .build()
+                )
+            }
         }
         return OkHttpClient.Builder()
             .addInterceptor(userAgent)

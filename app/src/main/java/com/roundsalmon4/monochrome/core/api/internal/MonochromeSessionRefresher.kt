@@ -58,6 +58,7 @@ class MonochromeSessionRefresher @Inject constructor(
         private const val REFRESH_BUFFER_MS = 10 * 60 * 1000L
         private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L
         private const val TURNSTILE_TIMEOUT_MS = 30_000L
+        private const val FAILURE_COOLDOWN_MS = 3 * 60 * 1000L
         private val CHROME_UA =
             "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
     }
@@ -68,6 +69,7 @@ class MonochromeSessionRefresher @Inject constructor(
     private val _status = MutableStateFlow<MonochromeSessionStatus>(MonochromeSessionStatus.Unknown)
     val status: StateFlow<MonochromeSessionStatus> = _status.asStateFlow()
     @Volatile private var autoRefreshStarted = false
+    @Volatile private var lastFailureAt = 0L
 
     /** Returns a usable session token, obtaining or refreshing one silently if the stored one is missing or close to expiry. */
     suspend fun getValidToken(): String? {
@@ -99,6 +101,13 @@ class MonochromeSessionRefresher @Inject constructor(
 
     /** Force a fresh session exchange through the Turnstile WebView flow. Safe to call concurrently. */
     suspend fun refresh(): String? = refreshMutex.withLock {
+        val now = System.currentTimeMillis()
+        if (now - lastFailureAt < FAILURE_COOLDOWN_MS) {
+            val remaining = (FAILURE_COOLDOWN_MS - (now - lastFailureAt)) / 1000
+            Log.d(TAG, "Session refresh in failure cooldown (${remaining}s left), skipping")
+            _status.value = MonochromeSessionStatus.Failed("Session exchange failed (cooldown)")
+            return null
+        }
         _status.value = MonochromeSessionStatus.Refreshing()
         try {
             val (cachedJwt, cachedExpiry) = prefs.getMonochromeJwt() ?: Pair("", 0L)
@@ -108,19 +117,23 @@ class MonochromeSessionRefresher @Inject constructor(
             }
             val turnstileToken = withTimeout(TURNSTILE_TIMEOUT_MS) { runTurnstile() }
             if (turnstileToken == null) {
+                lastFailureAt = System.currentTimeMillis()
                 _status.value = MonochromeSessionStatus.Failed("Turnstile challenge failed")
                 return null
             }
             val (jwt, expiry) = exchangeTokenForJwt(turnstileToken)
             if (jwt == null) {
+                lastFailureAt = System.currentTimeMillis()
                 _status.value = MonochromeSessionStatus.Failed("Session exchange failed")
                 return null
             }
+            lastFailureAt = 0L
             prefs.setMonochromeJwt(jwt, expiry)
             _status.value = MonochromeSessionStatus.Valid
             Log.i(TAG, "Session refreshed, expires ${formatExpiry(expiry)}")
             jwt
         } catch (e: Exception) {
+            lastFailureAt = System.currentTimeMillis()
             Log.w(TAG, "Session refresh failed: ${e.message}")
             _status.value = MonochromeSessionStatus.Failed(e.message ?: "Unknown error")
             null
