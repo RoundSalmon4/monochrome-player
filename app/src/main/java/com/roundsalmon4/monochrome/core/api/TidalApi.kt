@@ -192,7 +192,15 @@ class TidalApi @Inject constructor(
         var deezerNotFound = false
         if (track.isrc.isNotBlank()) {
             try {
-                val url = withTimeout(remaining()) { qobuzProxyClient.getStreamUrl(track.isrc) }
+                val url = withTimeout(remaining()) {
+                    qobuzProxyClient.getStreamUrl(
+                        isrc = track.isrc,
+                        title = track.title,
+                        artist = track.artistName,
+                        album = track.albumTitle,
+                        durationMs = track.durationMs
+                    )
+                }
                 if (url != null) return StreamUrl(url = url, mimeType = "audio/flac")
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
             qobuzNotFound = qobuzProxyClient.wasNotFound
