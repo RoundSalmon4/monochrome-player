@@ -195,7 +195,7 @@ class QobuzProxyClient @Inject constructor(
 
         for (item in items) {
             val id = item["id"]?.toString()?.takeIf { it.isNotBlank() } ?: continue
-            val candidateTitle = normalize(combineTitle(item["title"], item["version"]))
+            val candidateTitle = normalize(combineTitle(item["title"]?.toString(), item["version"]?.toString()))
             val candidateAlbum = normalize((item["album"] as? Map<*, *>)?.get("title")?.toString())
             val candidateIsrc = item["isrc"]?.toString()?.trim()?.uppercase(Locale.US).orEmpty()
             val candidateDuration = item["duration"]?.toString()?.toIntOrNull()
