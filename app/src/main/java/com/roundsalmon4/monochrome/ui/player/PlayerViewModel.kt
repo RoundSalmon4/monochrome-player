@@ -64,6 +64,7 @@ class PlayerViewModel @Inject constructor(
     private var waveformDecodeJob: Job? = null
 
     init {
+        playerStateManager.isPlayerScreenVisible = true
         viewModelScope.launch {
             val prefs = playerPreferences.uiState.first()
             playerController.setVolume(prefs.volume)
@@ -260,6 +261,11 @@ class PlayerViewModel @Inject constructor(
             playerController.pause()
             PlaybackService.stop(context)
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        playerStateManager.isPlayerScreenVisible = false
     }
 
     companion object {

@@ -181,6 +181,9 @@ class SettingsViewModel @Inject constructor(
     fun setColorSchemeMode(mode: String) = viewModelScope.launch { playerPreferences.setColorSchemeMode(mode) }
     fun setPiPEnabled(enabled: Boolean) = viewModelScope.launch { playerPreferences.setPiPEnabled(enabled) }
 
+    fun setBackgroundAvailability(enabled: Boolean) =
+        viewModelScope.launch { playerPreferences.setBackgroundAvailability(enabled) }
+
     fun setAmazonJwt(jwt: String) = viewModelScope.launch {
         val expiry = try {
             val parts = jwt.split(".")

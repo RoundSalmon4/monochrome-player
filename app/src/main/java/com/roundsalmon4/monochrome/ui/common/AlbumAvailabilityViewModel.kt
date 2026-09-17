@@ -7,8 +7,10 @@ import com.roundsalmon4.monochrome.core.api.Availability
 import com.roundsalmon4.monochrome.core.api.TidalApi
 import com.roundsalmon4.monochrome.core.api.TrackAvailabilityChecker
 import com.roundsalmon4.monochrome.core.api.model.Album
+import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -20,12 +22,14 @@ import javax.inject.Inject
  * screens and, on request, runs a bounded background pass over the albums
  * currently on screen so their dots fill in without opening each album.
  * Album fetches and track probes are cached in the checker, so repeated passes
- * are cheap and albums aren't re-checked.
+ * are cheap and albums aren't re-checked. Gated by the
+ * "Check availability in background" setting.
  */
 @HiltViewModel
 class AlbumAvailabilityViewModel @Inject constructor(
     private val checker: TrackAvailabilityChecker,
-    private val tidalApi: TidalApi
+    private val tidalApi: TidalApi,
+    private val playerPreferences: PlayerPreferences
 ) : ViewModel() {
 
     companion object {
@@ -38,20 +42,27 @@ class AlbumAvailabilityViewModel @Inject constructor(
     private val queued = ConcurrentHashMap.newKeySet<String>()
     private val albumSemaphore = Semaphore(MAX_CONCURRENT_ALBUMS)
 
-    /** Queues availability checks for the given on-screen albums (skips known/queued ones). */
+    /** Queues availability checks for the given on-screen albums, if the setting is enabled. */
     fun checkAlbums(albums: List<Album>) {
-        for (album in albums) {
-            if (checker.cachedAlbumStatus(album.id) != Availability.UNKNOWN) continue
-            if (!queued.add(album.id)) continue
-            viewModelScope.launch {
-                albumSemaphore.withPermit {
-                    try {
-                        Log.d(TAG, "background check album ${album.id} '${album.title}'")
-                        val (_, tracks) = tidalApi.getAlbum(album.id)
-                        checker.checkAlbum(album.id, tracks)
-                    } catch (e: Exception) {
-                        Log.w(TAG, "background album check failed for ${album.id}: ${e.message}")
-                        queued.remove(album.id)
+        if (albums.isEmpty()) return
+        viewModelScope.launch {
+            if (!playerPreferences.uiState.first().backgroundAvailability) {
+                Log.d(TAG, "background availability checks disabled in settings")
+                return@launch
+            }
+            for (album in albums) {
+                if (checker.cachedAlbumStatus(album.id) != Availability.UNKNOWN) continue
+                if (!queued.add(album.id)) continue
+                launch {
+                    albumSemaphore.withPermit {
+                        try {
+                            Log.d(TAG, "background check album ${album.id} '${album.title}'")
+                            val (_, tracks) = tidalApi.getAlbum(album.id)
+                            checker.checkAlbum(album.id, tracks)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "background album check failed for ${album.id}: ${e.message}")
+                            queued.remove(album.id)
+                        }
                     }
                 }
             }

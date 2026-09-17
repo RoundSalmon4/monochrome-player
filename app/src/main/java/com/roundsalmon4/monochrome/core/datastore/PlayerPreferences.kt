@@ -31,6 +31,7 @@ private object Keys {
     val SECONDARY_COLOR = intPreferencesKey("secondary_color")
     val COLOR_SCHEME_MODE = stringPreferencesKey("color_scheme_mode")
     val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
+    val BACKGROUND_AVAILABILITY = booleanPreferencesKey("background_availability")
     val AMAZON_JWT = stringPreferencesKey("amazon_jwt")
     val AMAZON_JWT_EXPIRY = stringPreferencesKey("amazon_jwt_expiry")
     val MONOCHROME_JWT = stringPreferencesKey("monochrome_jwt")
@@ -53,6 +54,7 @@ data class PreferencesUiState(
     val secondaryColor: Int = 0xFF282828.toInt(),
     val colorSchemeMode: String = "STANDARD",
     val pipEnabled: Boolean = true,
+    val backgroundAvailability: Boolean = true,
     val volume: Float = 1.0f
 )
 
@@ -73,6 +75,7 @@ class PlayerPreferences @Inject constructor(
             secondaryColor = prefs[Keys.SECONDARY_COLOR] ?: 0xFF282828.toInt(),
             colorSchemeMode = prefs[Keys.COLOR_SCHEME_MODE] ?: "STANDARD",
             pipEnabled = prefs[Keys.PIP_ENABLED] ?: true,
+            backgroundAvailability = prefs[Keys.BACKGROUND_AVAILABILITY] ?: true,
             volume = prefs[Keys.VOLUME] ?: 1.0f
         )
     }
@@ -119,6 +122,10 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun setPiPEnabled(enabled: Boolean) {
         context.playerDataStore.edit { it[Keys.PIP_ENABLED] = enabled }
+    }
+
+    suspend fun setBackgroundAvailability(enabled: Boolean) {
+        context.playerDataStore.edit { it[Keys.BACKGROUND_AVAILABILITY] = enabled }
     }
 
     suspend fun setAmazonJwt(jwt: String, expiryTimestamp: Long) {

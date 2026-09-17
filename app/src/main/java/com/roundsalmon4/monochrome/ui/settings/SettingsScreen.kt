@@ -183,6 +183,13 @@ private fun PlayerSection(uiState: PreferencesUiState, viewModel: SettingsViewMo
                 onCheckedChange = { viewModel.setPiPEnabled(it) }
             )
         }
+
+        SwitchItem(
+            name = "Check availability in background",
+            description = "Probe albums on screen so availability dots fill in automatically",
+            checked = uiState.backgroundAvailability,
+            onCheckedChange = { viewModel.setBackgroundAvailability(it) }
+        )
     }
 }
 

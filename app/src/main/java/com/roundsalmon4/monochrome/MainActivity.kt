@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.media3.common.Player
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
 import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
@@ -48,6 +51,16 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var monochromeSessionRefresher: MonochromeSessionRefresher
 
+    @Volatile
+    private var pipEnabled = true
+
+    // onStop() does not always follow onUserLeaveHint() (e.g. switching apps from
+    // Overview), so a debounced PiP check is posted there too. The delay lets
+    // transient stops (dialogs, overlays, config changes) cancel in onStart().
+    private val pipHandler = Handler(Looper.getMainLooper())
+    private val pipStopRunnable = Runnable { tryEnterPictureInPicture() }
+    private val pipStopDelayMs = 300L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -55,6 +68,9 @@ class MainActivity : ComponentActivity() {
         monochromeSessionRefresher.startAutoRefresh()
         lifecycleScope.launch {
             monochromeSessionRefresher.getValidToken()
+        }
+        lifecycleScope.launch {
+            playerPreferences.uiState.collect { pipEnabled = it.pipEnabled }
         }
         lifecycleScope.launch {
             val saved = playerPreferences.getAmazonJwt()
@@ -95,17 +111,52 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerController.exoPlayer.isPlaying) {
-            val aspectRatio = Rational(16, 9)
-            val params = PictureInPictureParams.Builder()
-                .setAspectRatio(aspectRatio)
-                .build()
-            enterPictureInPictureMode(params)
+        tryEnterPictureInPicture()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isFinishing && !isChangingConfigurations) {
+            pipHandler.postDelayed(pipStopRunnable, pipStopDelayMs)
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        pipHandler.removeCallbacks(pipStopRunnable)
+    }
+
+    private fun tryEnterPictureInPicture() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        if (isInPictureInPictureMode || isFinishing || isChangingConfigurations) return
+        // enterPictureInPictureMode throws IllegalStateException unless the
+        // activity is resumed; the debounced onStop backstop can fire after that.
+        if (!lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        if (!playerStateManager.isPlayerScreenVisible) return
+        if (!pipEnabled) return
+
+        val player = playerController.exoPlayer
+        // Enter PiP while playing OR while rebuffering (isPlaying is briefly
+        // false during rebuffers, which made PiP intermittent before).
+        val activelyPlaying = player.isPlaying || player.playbackState == Player.STATE_BUFFERING
+        if (!activelyPlaying) return
+
+        val videoWidth = player.videoSize.width
+        val videoHeight = player.videoSize.height
+        val aspectRatio = if (videoWidth > 0 && videoHeight > 0) {
+            Rational(videoWidth, videoHeight)
+        } else {
+            Rational(16, 9)
+        }
+        val params = PictureInPictureParams.Builder()
+            .setAspectRatio(aspectRatio)
+            .build()
+        runCatching { enterPictureInPictureMode(params) }
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        playerStateManager.isPlayerScreenVisible = isInPictureInPictureMode
     }
 
     private fun requestNotificationPermission() {

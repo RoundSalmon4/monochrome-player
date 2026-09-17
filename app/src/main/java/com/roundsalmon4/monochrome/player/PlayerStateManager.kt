@@ -70,6 +70,9 @@ class PlayerStateManager @Inject constructor(
     private var startedTrackId: String? = null
     @Volatile private var shuffleOrder: MutableList<Int> = mutableListOf()
 
+    /** True while the full Player screen is on-screen (or in PiP); gates auto-PiP entry. */
+    @Volatile var isPlayerScreenVisible: Boolean = false
+
     init {
         scope.launch {
             val savedJson = runCatching { prefs.getSavedQueueJson() }.getOrNull()

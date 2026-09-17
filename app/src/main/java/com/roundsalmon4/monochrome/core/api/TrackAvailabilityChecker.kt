@@ -41,7 +41,8 @@ class TrackAvailabilityChecker @Inject constructor(
     companion object {
         private const val TAG = "ChromePlayer-Availability"
         private const val TTL_MS = 10 * 60 * 1000L
-        private const val PROBE_TIMEOUT_MS = 6_000L
+        private const val PROBE_TIMEOUT_MS = 3_000L
+        private const val SOURCE_COOLDOWN_MS = 60_000L
         private const val MAX_CONCURRENT = 3
     }
 
@@ -49,6 +50,9 @@ class TrackAvailabilityChecker @Inject constructor(
 
     private val cache = ConcurrentHashMap<String, Entry>()
     private val semaphore = Semaphore(MAX_CONCURRENT)
+
+    /** A source that fails with an infra error (timeout/exception) is skipped for a while. */
+    private val sourceCooldownUntilMs = ConcurrentHashMap<String, Long>()
 
     private val _trackStatus = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val trackStatus: StateFlow<Map<String, Boolean>> = _trackStatus.asStateFlow()
@@ -152,10 +156,17 @@ class TrackAvailabilityChecker @Inject constructor(
     }
 
     private suspend fun probeSource(name: String, track: Track, block: suspend () -> Boolean): Boolean {
+        val coolingUntil = sourceCooldownUntilMs[name]
+        if (coolingUntil != null && coolingUntil > System.currentTimeMillis()) {
+            Log.d(TAG, "$name is cooling down, skipping for '${track.title}'")
+            return false
+        }
         val result = try {
             withTimeout(PROBE_TIMEOUT_MS) { block() }
         } catch (e: Exception) {
-            Log.d(TAG, "$name probe for '${track.title}' failed: ${e.message}")
+            // Infra failure (timeout/network): skip this source for the next checks.
+            sourceCooldownUntilMs[name] = System.currentTimeMillis() + SOURCE_COOLDOWN_MS
+            Log.d(TAG, "$name probe for '${track.title}' failed: ${e.message} -> cooling down ${SOURCE_COOLDOWN_MS / 1000}s")
             false
         }
         if (result) Log.d(TAG, "$name has '${track.title}'")
