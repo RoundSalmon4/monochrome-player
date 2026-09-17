@@ -45,6 +45,24 @@ class SoundCloudClient @Inject constructor(
     @Volatile
     var wasNotFound: Boolean = false
 
+    data class SoundCloudHealth(val available: Boolean, val detail: String)
+
+    /**
+     * Probes the actual playback path: extract a client ID and confirm it with a
+     * lightweight search. Used by the Settings backend health section so the
+     * SoundCloud indicator reflects whether playback would really work.
+     */
+    suspend fun checkAvailability(): SoundCloudHealth {
+        val id = getValidClientId(force = true)
+            ?: return SoundCloudHealth(false, "client ID extraction failed")
+        val body = searchTracks("health", id)
+        return when {
+            body != null -> SoundCloudHealth(true, "client ID ok, search 200")
+            clientId == null -> SoundCloudHealth(false, "client ID rejected (401)")
+            else -> SoundCloudHealth(false, "search failed")
+        }
+    }
+
     suspend fun getStreamUrl(
         title: String,
         artist: String

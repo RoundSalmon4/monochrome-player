@@ -18,7 +18,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class BackendHealthChecker @Inject constructor(
-    okHttpClient: OkHttpClient
+    okHttpClient: OkHttpClient,
+    private val soundCloudClient: com.roundsalmon4.monochrome.core.api.internal.SoundCloudClient
 ) {
     companion object {
         private const val TAG = "ChromePlayer-Health"
@@ -44,13 +45,16 @@ class BackendHealthChecker @Inject constructor(
         .callTimeout(8, TimeUnit.SECONDS)
         .build()
 
+    enum class ProbeKind { HTTP, SOUNDCLOUD }
+
     data class Target(
         val group: String,
         val name: String,
         val url: String,
         val method: String = "GET",
         val authHeader: String? = null,
-        val htmlMeansDown: Boolean = false
+        val htmlMeansDown: Boolean = false,
+        val kind: ProbeKind = ProbeKind.HTTP
     )
 
     data class Result(
@@ -74,7 +78,7 @@ class BackendHealthChecker @Inject constructor(
         add(Target("Playback", "Monochrome CDN", "https://tracks.monochrome.tf/"))
         add(Target("Playback", "Unified (geeked)", "https://music-api.geeked.wtf/"))
         add(Target("Playback", "Amazon (geeked)", "https://amz.geeked.wtf/"))
-        add(Target("Sources", "SoundCloud", "https://soundcloud.com/"))
+        add(Target("Sources", "SoundCloud", "https://soundcloud.com/", kind = ProbeKind.SOUNDCLOUD))
         add(Target("Sources", "Qobuz - Squid", "https://qobuz.squid.wtf/api/get-music?q=health"))
         add(Target("Sources", "Qobuz - Monokenny", "https://qobuz.kennyy.com.br/api/get-music?q=health"))
         add(
@@ -128,6 +132,10 @@ class BackendHealthChecker @Inject constructor(
     }
 
     private suspend fun check(target: Target): Result = withContext(Dispatchers.IO) {
+        if (target.kind == ProbeKind.SOUNDCLOUD) {
+            val health = soundCloudClient.checkAvailability()
+            return@withContext Result(target, health.available, health.detail)
+        }
         try {
             val builder = Request.Builder().url(target.url)
             target.authHeader?.let { builder.header("Authorization", it) }
