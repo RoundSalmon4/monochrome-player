@@ -23,22 +23,19 @@ class SoundCloudClient @Inject constructor(
         private val CLIENT_ID_PATTERNS = listOf(
             Regex("""client_id\s*[:=]\s*"([A-Za-z0-9]{20,50})""""),
             Regex("""clientId\s*[:=]\s*"([A-Za-z0-9]{20,50})""""),
+            Regex("""(?:apiClientId|api_client_id)"\s*:\s*"([A-Za-z0-9]{20,50})""""),
             Regex("""client_id\s*[:=]\s*'([A-Za-z0-9]{20,50})'"""),
             Regex("""clientId\s*[:=]\s*'([A-Za-z0-9]{20,50})'"""),
             Regex("""client_id=([A-Za-z0-9]{20,50})"""),
             Regex("""client_id%3D([A-Za-z0-9]{20,50})""")
         )
         private val SCRIPT_SRC_PATTERN = Regex("""(?:src|href)="([^"]+\.js)"""")
-        private const val MAX_SCRIPTS = 8
+        private const val MAX_SCRIPTS = 15
         private const val EXTRACT_COOLDOWN_MS = 10_000L
         private const val FETCH_TIMEOUT_MS = 15_000L
         private const val MAX_CANDIDATES = 10
-        private val FALLBACK_CLIENT_IDS = listOf(
-            "pJ6Fj6roW2KRzWAOwGj6kkQ8VRBJjyBD",
-            "6bs1QjDBWrmh7FpcKrIDvzodJ2ZZpRwe",
-            "M3trxbPFUFk5jC7dTSqudOxWNLQ4iViz",
-            "95f55c0c83c7486f9c8289d67a72386d"
-        )
+        private const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     }
 
     private val gson = Gson()
@@ -194,21 +191,19 @@ class SoundCloudClient @Inject constructor(
 
         val now = System.currentTimeMillis()
         if (!force && now - lastExtractAttempt < EXTRACT_COOLDOWN_MS) {
-            Log.d(TAG, "Extraction cooldown active, using fallback client ID")
-            return FALLBACK_CLIENT_IDS.firstOrNull()
+            Log.d(TAG, "Extraction cooldown active")
+            return null
         }
 
         val extracted = tryExtractClientId()
+        lastExtractAttempt = now
         if (extracted != null) {
             clientId = extracted
-            lastExtractAttempt = now
             Log.d(TAG, "SoundCloud: extracted client ID ${extracted.take(8)}...")
             return extracted
         }
-
-        Log.w(TAG, "SoundCloud: client ID extraction failed, using fallback list")
-        lastExtractAttempt = now
-        return FALLBACK_CLIENT_IDS.firstOrNull()
+        Log.w(TAG, "SoundCloud: client ID extraction failed; SoundCloud unavailable")
+        return null
     }
 
     /**
@@ -241,7 +236,8 @@ class SoundCloudClient @Inject constructor(
         return kotlinx.coroutines.withTimeoutOrNull(FETCH_TIMEOUT_MS) {
             try {
                 val req = Request.Builder().url(url)
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
+                    .header("User-Agent", DESKTOP_UA)
+                    .header("Accept", "text/html,application/javascript,*/*")
                     .build()
                 withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }.use { resp ->
                     if (!resp.isSuccessful) {
