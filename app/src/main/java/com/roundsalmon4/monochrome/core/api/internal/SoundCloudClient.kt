@@ -24,8 +24,12 @@ class SoundCloudClient @Inject constructor(
             Regex("""client_id\s*[:=]\s*"([A-Za-z0-9]{20,50})""""),
             Regex("""clientId\s*[:=]\s*"([A-Za-z0-9]{20,50})""""),
             Regex("""client_id\s*[:=]\s*'([A-Za-z0-9]{20,50})'"""),
-            Regex("""clientId\s*[:=]\s*'([A-Za-z0-9]{20,50})'""")
+            Regex("""clientId\s*[:=]\s*'([A-Za-z0-9]{20,50})'"""),
+            Regex("""client_id=([A-Za-z0-9]{20,50})"""),
+            Regex("""client_id%3D([A-Za-z0-9]{20,50})""")
         )
+        private val SCRIPT_SRC_PATTERN = Regex("""(?:src|href)="([^"]+\.js)"""")
+        private const val MAX_SCRIPTS = 8
         private const val EXTRACT_COOLDOWN_MS = 10_000L
         private const val FETCH_TIMEOUT_MS = 15_000L
         private const val MAX_CANDIDATES = 10
@@ -57,8 +61,22 @@ class SoundCloudClient @Inject constructor(
 
         val query = "$title $artist"
         Log.d(TAG, "Searching '$query' (client_id=${id.take(8)}...)")
+
+        val searchBody = searchTracks(query, id)
+        if (searchBody == null && clientId == null) {
+            // The client ID was rejected (401) and cleared; re-extract once and retry.
+            val retryId = getValidClientId(force = true) ?: return null
+            Log.w(TAG, "Retrying search with refreshed client_id=${retryId.take(8)}...")
+            val retryBody = searchTracks(query, retryId)
+            return handleSearchBody(retryBody, title, artist, retryId)
+        }
+        return handleSearchBody(searchBody, title, artist, id)
+    }
+
+    /** Returns the raw search body, or null (and clears [clientId]) on a 401. */
+    private suspend fun searchTracks(query: String, id: String): String? {
         val searchUrl = "$SEARCH_URL?q=${java.net.URLEncoder.encode(query, "UTF-8")}&client_id=$id&limit=5"
-        val searchBody = try {
+        return try {
             val req = Request.Builder().url(searchUrl)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
                 .build()
@@ -72,12 +90,21 @@ class SoundCloudClient @Inject constructor(
                     }
                     return null
                 }
-                resp.body?.string() ?: return null
+                resp.body?.string()
             }
         } catch (e: Exception) {
             Log.w(TAG, "SoundCloud search failed: ${e.message}")
-            return null
+            null
         }
+    }
+
+    private suspend fun handleSearchBody(
+        searchBody: String?,
+        title: String,
+        artist: String,
+        id: String
+    ): MonochromeStreamResult? {
+        if (searchBody == null) return null
 
         val searchResult = runCatching {
             gson.fromJson<Map<String, Any?>>(
@@ -88,14 +115,13 @@ class SoundCloudClient @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val collection = searchResult["collection"] as? List<Map<String, Any?>> ?: return null
         if (collection.isEmpty()) {
-            Log.d(TAG, "SoundCloud: no results for '$query'")
+            Log.d(TAG, "SoundCloud: no results for '$title $artist'")
             wasNotFound = true
             return null
         }
 
         val bestMatch = collection.firstNotNullOfOrNull { item ->
             val trackTitle = item["title"]?.toString() ?: return@firstNotNullOfOrNull null
-            val trackArtist = (item["user"] as? Map<*, *>)?.get("username")?.toString() ?: ""
             if (StringUtil.titlesMatch(title, trackTitle)) item else null
         }
         if (bestMatch == null) {
@@ -159,11 +185,16 @@ class SoundCloudClient @Inject constructor(
         }
     }
 
-    private suspend fun getValidClientId(): String? {
-        clientId?.let { return it }
+    private suspend fun getValidClientId(force: Boolean = false): String? {
+        if (!force) {
+            clientId?.let { return it }
+        } else {
+            clientId = null
+        }
 
         val now = System.currentTimeMillis()
-        if (now - lastExtractAttempt < EXTRACT_COOLDOWN_MS) {
+        if (!force && now - lastExtractAttempt < EXTRACT_COOLDOWN_MS) {
+            Log.d(TAG, "Extraction cooldown active, using fallback client ID")
             return FALLBACK_CLIENT_IDS.firstOrNull()
         }
 
@@ -171,34 +202,72 @@ class SoundCloudClient @Inject constructor(
         if (extracted != null) {
             clientId = extracted
             lastExtractAttempt = now
-            Log.d(TAG, "SoundCloud: extracted client ID from page")
+            Log.d(TAG, "SoundCloud: extracted client ID ${extracted.take(8)}...")
             return extracted
         }
 
+        Log.w(TAG, "SoundCloud: client ID extraction failed, using fallback list")
         lastExtractAttempt = now
         return FALLBACK_CLIENT_IDS.firstOrNull()
     }
 
+    /**
+     * Fetch the web app and locate a client_id. On modern SoundCloud the ID is
+     * no longer in the HTML; it lives in one of the JS bundles referenced by the
+     * page, so fall back to crawling the script assets.
+     */
     private suspend fun tryExtractClientId(): String? {
+        val html = fetchText(WEB_URL) ?: return null
+        extractClientIdFromHtml(html)?.let { return it }
+
+        val scripts = SCRIPT_SRC_PATTERN.findAll(html)
+            .map { it.groupValues[1] }
+            .map { absUrl(it) }
+            .filter { it != null }
+            .map { it!! }
+            .distinct()
+            .take(MAX_SCRIPTS)
+            .toList()
+        Log.d(TAG, "SoundCloud: no inline client_id, scanning ${scripts.size} script bundle(s)")
+
+        for (script in scripts) {
+            val js = fetchText(script) ?: continue
+            extractClientIdFromHtml(js)?.let { return it }
+        }
+        return null
+    }
+
+    private suspend fun fetchText(url: String): String? {
         return kotlinx.coroutines.withTimeoutOrNull(FETCH_TIMEOUT_MS) {
             try {
-                val req = Request.Builder().url(WEB_URL)
+                val req = Request.Builder().url(url)
                     .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
                     .build()
-                val resp = withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }
-                val html = resp.use { it.body?.string() } ?: return@withTimeoutOrNull null
-                extractClientIdFromHtml(html)
+                withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }.use { resp ->
+                    if (!resp.isSuccessful) {
+                        Log.w(TAG, "SoundCloud fetch HTTP ${resp.code} for $url")
+                        null
+                    } else resp.body?.string()
+                }
             } catch (e: Exception) {
-                Log.w(TAG, "SoundCloud page fetch failed: ${e.message}")
+                Log.w(TAG, "SoundCloud fetch failed for $url: ${e.message}")
                 null
             }
         }
     }
 
-    private fun extractClientIdFromHtml(html: String): String? {
+    private fun absUrl(src: String): String? = when {
+        src.startsWith("https://") -> src
+        src.startsWith("//") -> "https:$src"
+        src.startsWith("http://") -> src
+        src.startsWith("/") -> "https://soundcloud.com$src"
+        else -> null
+    }
+
+    private fun extractClientIdFromHtml(text: String): String? {
         val candidates = mutableListOf<String>()
         for (pattern in CLIENT_ID_PATTERNS) {
-            pattern.findAll(html).forEach { match ->
+            pattern.findAll(text).forEach { match ->
                 val id = match.groupValues[1]
                 if (id.length in 20..50 && candidates.size < MAX_CANDIDATES) {
                     candidates.add(id)
