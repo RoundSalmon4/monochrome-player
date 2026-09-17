@@ -194,7 +194,7 @@ class QobuzProxyClient @Inject constructor(
         var bestScore = REJECT_SCORE
 
         for (item in items) {
-            val id = item["id"]?.toString()?.takeIf { it.isNotBlank() } ?: continue
+            val id = numericAwareId(item["id"]) ?: continue
             val candidateTitle = normalize(combineTitle(item["title"]?.toString(), item["version"]?.toString()))
             val candidateAlbum = normalize((item["album"] as? Map<*, *>)?.get("title")?.toString())
             val candidateIsrc = item["isrc"]?.toString()?.trim()?.uppercase(Locale.US).orEmpty()
@@ -292,6 +292,12 @@ class QobuzProxyClient @Inject constructor(
 
     private fun artistNamesMatch(a: String, b: String): Boolean =
         a.contains(b) || b.contains(a)
+
+    /** Gson parses JSON numbers as Double, which stringifies large IDs in scientific notation. */
+    private fun numericAwareId(raw: Any?): String? = when (raw) {
+        is Number -> raw.toLong().toString()
+        else -> raw?.toString()?.takeIf { it.isNotBlank() }
+    }
 
     // ------------------------------------------------------------------ stream
 

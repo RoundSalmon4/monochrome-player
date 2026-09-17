@@ -145,7 +145,7 @@ class SoundCloudClient @Inject constructor(
             return null
         }
 
-        val trackId = bestMatch["id"]?.toString() ?: return null
+        val trackId = numericAwareId(bestMatch["id"]) ?: return null
         val trackTitle = bestMatch["title"]?.toString() ?: title
         Log.d(TAG, "SoundCloud: matched track $trackId - $trackTitle")
 
@@ -276,6 +276,12 @@ class SoundCloudClient @Inject constructor(
         src.startsWith("http://") -> src
         src.startsWith("/") -> "https://soundcloud.com$src"
         else -> null
+    }
+
+    /** Gson parses JSON numbers as Double, which stringifies large IDs in scientific notation. */
+    private fun numericAwareId(raw: Any?): String? = when (raw) {
+        is Number -> raw.toLong().toString()
+        else -> raw?.toString()?.takeIf { it.isNotBlank() }
     }
 
     private fun extractClientIdFromHtml(text: String): String? {
