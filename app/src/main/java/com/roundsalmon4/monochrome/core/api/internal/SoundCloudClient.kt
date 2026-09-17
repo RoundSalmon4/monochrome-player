@@ -55,13 +55,23 @@ class SoundCloudClient @Inject constructor(
     suspend fun checkAvailability(): SoundCloudHealth {
         val id = getValidClientId(force = true)
             ?: return SoundCloudHealth(false, "client ID extraction failed")
-        val body = searchTracks("health", id)
-        return when {
-            body != null -> SoundCloudHealth(true, "client ID ok, search 200")
-            clientId == null -> SoundCloudHealth(false, "client ID rejected (401)")
-            else -> SoundCloudHealth(false, "search failed")
+        val body = searchTracks("music", id)
+        if (body == null) {
+            return if (clientId == null) SoundCloudHealth(false, "client ID rejected (401)")
+            else SoundCloudHealth(false, "search failed")
         }
+        val first = parseCollection(body)?.firstOrNull()
+            ?: return SoundCloudHealth(true, "search ok (no test track)")
+        val stream = resolveStream(first, id)
+            ?: return SoundCloudHealth(false, "search ok, stream resolution failed")
+        return SoundCloudHealth(true, "stream ok (${stream.second})")
     }
+
+    private fun parseCollection(body: String): List<Map<String, Any?>>? = runCatching {
+        val root = gson.fromJson<Map<String, Any?>>(body, object : TypeToken<Map<String, Any?>>() {}.type)
+        @Suppress("UNCHECKED_CAST")
+        root["collection"] as? List<Map<String, Any?>>
+    }.getOrNull()
 
     suspend fun getStreamUrl(
         title: String,
@@ -149,12 +159,12 @@ class SoundCloudClient @Inject constructor(
         val trackTitle = bestMatch["title"]?.toString() ?: title
         Log.d(TAG, "SoundCloud: matched track $trackId - $trackTitle")
 
-        val streamUrl = getStreamForTrack(trackId, id)
-        if (streamUrl != null) {
-            Log.d(TAG, "SoundCloud: stream URL resolved for track $trackId")
+        val stream = resolveStream(bestMatch, id)
+        if (stream != null) {
+            Log.d(TAG, "SoundCloud: stream resolved for track $trackId (${stream.second})")
             return MonochromeStreamResult(
-                url = streamUrl,
-                mimeType = "audio/mpeg",
+                url = stream.first,
+                mimeType = stream.second,
                 isrc = null,
                 title = trackTitle
             )
@@ -163,39 +173,68 @@ class SoundCloudClient @Inject constructor(
         return null
     }
 
-    private suspend fun getStreamForTrack(trackId: String, clientId: String): String? {
-        val streamUrl = "https://api-v2.soundcloud.com/tracks/$trackId/streams?client_id=$clientId"
-        Log.d(TAG, "Requesting streams for track $trackId")
+    /**
+     * Resolves a playable URL from the track's `media.transcodings` (the
+     * `/tracks/{id}/streams` endpoint was retired and now returns 404).
+     * Prefers a progressive (mp3) transcoding, falling back to HLS.
+     */
+    private suspend fun resolveStream(track: Map<String, Any?>, clientId: String): Pair<String, String>? {
+        val media = track["media"] as? Map<*, *>
+        val transcodings = media?.get("transcodings") as? List<*>
+        if (transcodings.isNullOrEmpty()) {
+            Log.w(TAG, "SoundCloud: track has no transcodings")
+            return null
+        }
+
+        data class Transcoding(val url: String, val protocol: String)
+        val parsed = transcodings.mapNotNull { item ->
+            val m = item as? Map<*, *> ?: return@mapNotNull null
+            val url = m["url"]?.toString() ?: return@mapNotNull null
+            val protocol = (m["format"] as? Map<*, *>)?.get("protocol")?.toString().orEmpty()
+            Transcoding(url, protocol)
+        }
+        val chosen = parsed.firstOrNull { it.protocol == "progressive" }
+            ?: parsed.firstOrNull { it.protocol == "hls" }
+            ?: parsed.firstOrNull()
+            ?: run {
+                Log.w(TAG, "SoundCloud: no usable transcoding")
+                return null
+            }
+        Log.d(TAG, "SoundCloud: using ${chosen.protocol.ifBlank { "unknown" }} transcoding")
+
+        val auth = track["track_authorization"]?.toString()
+        val url = buildString {
+            append(chosen.url)
+            append("?client_id=").append(clientId)
+            if (!auth.isNullOrBlank()) {
+                append("&track_authorization=").append(java.net.URLEncoder.encode(auth, "UTF-8"))
+            }
+        }
+        val body = httpGetText(url) ?: return null
+        val streamUrl = runCatching {
+            gson.fromJson(body, Map::class.java)["url"]?.toString()
+        }.getOrNull()
+        if (streamUrl.isNullOrBlank()) {
+            Log.w(TAG, "SoundCloud: transcoding response had no url")
+            return null
+        }
+        val mime = if (chosen.protocol == "hls") "application/x-mpegURL" else "audio/mpeg"
+        return streamUrl to mime
+    }
+
+    private suspend fun httpGetText(url: String): String? {
         return try {
-            val req = Request.Builder().url(streamUrl)
+            val req = Request.Builder().url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
                 .build()
             withContext(Dispatchers.IO) { okHttpClient.newCall(req).execute() }.use { resp ->
                 if (!resp.isSuccessful) {
-                    Log.w(TAG, "SoundCloud streams: HTTP ${resp.code}")
-                    return null
-                }
-                val body = resp.body?.string() ?: return null
-                val data = gson.fromJson(body, Map::class.java) ?: return null
-
-                // Try progressive (direct MP3) first
-                @Suppress("UNCHECKED_CAST")
-                val progressive = data["progressive"] as? List<Map<String, Any?>>
-                val direct = progressive?.firstOrNull { it["format"]?.toString()?.contains("mp3") == true }
-                val url = direct?.get("url")?.toString()
-                if (url != null) {
-                    Log.d(TAG, "SoundCloud: using progressive mp3 for track $trackId")
-                    return url
-                }
-
-                // Fall back to HLS
-                val hls = data["hls"] as? Map<*, *>
-                val hlsUrl = hls?.get("url")?.toString()
-                if (hlsUrl != null) Log.d(TAG, "SoundCloud: using HLS for track $trackId")
-                hlsUrl
+                    Log.w(TAG, "SoundCloud request HTTP ${resp.code}")
+                    null
+                } else resp.body?.string()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "SoundCloud streams failed: ${e.message}")
+            Log.w(TAG, "SoundCloud request failed: ${e.message}")
             null
         }
     }

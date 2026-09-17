@@ -46,6 +46,10 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.newReleases) {
+        availabilityViewModel.checkAlbums(state.newReleases)
+    }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(Unit) { viewModel.refresh() }

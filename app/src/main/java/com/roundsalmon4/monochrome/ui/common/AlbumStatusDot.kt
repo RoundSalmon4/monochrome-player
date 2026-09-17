@@ -21,7 +21,7 @@ fun AlbumStatusDot(status: Availability, modifier: Modifier = Modifier) {
         Availability.ALL_AVAILABLE -> Color(0xFF2E7D32)
         Availability.SOME_AVAILABLE -> Color(0xFFF9A825)
         Availability.NONE_AVAILABLE -> MaterialTheme.colorScheme.error
-        Availability.UNKNOWN -> MaterialTheme.colorScheme.outlineVariant
+        Availability.CHECKING, Availability.UNKNOWN -> MaterialTheme.colorScheme.outlineVariant
     }
     Box(
         modifier = modifier

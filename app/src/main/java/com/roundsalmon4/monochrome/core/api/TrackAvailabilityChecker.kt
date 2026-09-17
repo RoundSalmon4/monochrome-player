@@ -23,7 +23,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** Aggregate availability of an album, derived from its tracks' checks. */
-enum class Availability { UNKNOWN, ALL_AVAILABLE, SOME_AVAILABLE, NONE_AVAILABLE }
+enum class Availability { UNKNOWN, CHECKING, ALL_AVAILABLE, SOME_AVAILABLE, NONE_AVAILABLE }
 
 /**
  * Determines whether tracks can actually be streamed by probing the live
@@ -71,6 +71,7 @@ class TrackAvailabilityChecker @Inject constructor(
             _albumStatus.update { it + (albumId to Availability.NONE_AVAILABLE) }
             return
         }
+        _albumStatus.update { it + (albumId to Availability.CHECKING) }
         val completed = AtomicInteger(0)
         val availableCount = AtomicInteger(0)
         val lock = Mutex()
@@ -79,17 +80,20 @@ class TrackAvailabilityChecker @Inject constructor(
             tracks.map { track ->
                 async {
                     val ok = semaphore.withPermit { checkTrack(track) }
-                    val avail = lock.withLock {
+                    val (avail, done) = lock.withLock {
                         availableCount.addAndGet(if (ok) 1 else 0)
                         completed.incrementAndGet()
-                        availableCount.get()
+                        availableCount.get() to completed.get()
                     }
-                    val done = completed.get()
+                    // Only conclude a state that is already certain:
+                    // - all tracks available once every track is known available
+                    // - "some" once at least one is available AND at least one is not
+                    // - otherwise it's still checking (never prematurely report "some")
                     val status = when {
-                        avail == 0 && done == tracks.size -> Availability.NONE_AVAILABLE
-                        avail == 0 -> Availability.SOME_AVAILABLE
-                        avail == tracks.size && done == tracks.size -> Availability.ALL_AVAILABLE
-                        else -> Availability.SOME_AVAILABLE
+                        avail == tracks.size -> Availability.ALL_AVAILABLE
+                        avail > 0 && (done - avail) > 0 -> Availability.SOME_AVAILABLE
+                        done == tracks.size -> Availability.NONE_AVAILABLE
+                        else -> Availability.CHECKING
                     }
                     _albumStatus.update { it + (albumId to status) }
                     Log.d(TAG, "album $albumId: $done/${tracks.size} checked, $avail available -> $status")

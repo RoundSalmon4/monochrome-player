@@ -166,13 +166,13 @@ private fun AlbumAvailabilityIndicator(status: Availability) {
         Availability.ALL_AVAILABLE -> Color(0xFF2E7D32)
         Availability.SOME_AVAILABLE -> Color(0xFFF9A825)
         Availability.NONE_AVAILABLE -> MaterialTheme.colorScheme.error
-        Availability.UNKNOWN -> MaterialTheme.colorScheme.outline
+        Availability.CHECKING, Availability.UNKNOWN -> MaterialTheme.colorScheme.outline
     }
     val label = when (status) {
         Availability.ALL_AVAILABLE -> "All tracks available"
         Availability.SOME_AVAILABLE -> "Some tracks available"
         Availability.NONE_AVAILABLE -> "No tracks available"
-        Availability.UNKNOWN -> "Checking availability..."
+        Availability.CHECKING, Availability.UNKNOWN -> "Checking availability..."
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,

@@ -22,6 +22,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +51,10 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
+
+    LaunchedEffect(state.albums) {
+        availabilityViewModel.checkAlbums(state.albums)
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TextField(

@@ -57,6 +57,10 @@ fun ArtistDetailScreen(
     val isSubscribed by viewModel.isSubscribed.collectAsStateWithLifecycle()
     val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
 
+    LaunchedEffect(state.albums) {
+        availabilityViewModel.checkAlbums(state.albums)
+    }
+
     LaunchedEffect(artistId) { viewModel.loadArtist(artistId) }
 
     Column(modifier = Modifier.fillMaxSize()) {
