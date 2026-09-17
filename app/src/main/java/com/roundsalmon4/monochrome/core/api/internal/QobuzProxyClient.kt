@@ -269,7 +269,7 @@ class QobuzProxyClient @Inject constructor(
     }
 
     private fun combineTitle(title: String?, version: String?): String =
-        listOf(title, version).filter { it.isNotBlank() }.joinToString(" ")
+        listOfNotNull(title, version).filter { it.isNotBlank() }.joinToString(" ")
 
     private fun artistNames(item: Map<String, Any?>): List<String> {
         val artists = item["artists"] as? List<*> ?: item["artist"]?.let { listOf(it) } ?: return emptyList()
