@@ -6,9 +6,14 @@ import com.roundsalmon4.monochrome.core.api.internal.MonochromePlaybackClient
 import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.UnifiedPlaybackClient
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
@@ -60,17 +65,41 @@ class TidalApi @Inject constructor(
             .create(TidalApiService::class.java)
     }
 
+    private sealed class Res<out R> {
+        class Ok<R>(val value: R) : Res<R>()
+        object AllFailed : Res<Nothing>()
+    }
+
     private suspend fun <T> tryInstances(block: suspend (TidalApiService) -> T): T {
-        val errors = mutableListOf<Throwable>()
-        for (service in services) {
-            try {
-                return block(service)
-            } catch (e: Exception) {
-                android.util.Log.w("ChromePlayer", "API instance failed: ${e.message}")
-                errors.add(e)
+        val channel = Channel<Res<T>>(Channel.UNLIMITED)
+        val failures = java.util.concurrent.atomic.AtomicInteger(0)
+        val lastError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        services.forEach { service ->
+            scope.launch {
+                try {
+                    channel.send(Res.Ok(withTimeout(INSTANCE_TIMEOUT_MS) { block(service) }))
+                } catch (e: Exception) {
+                    android.util.Log.w("ChromePlayer", "API instance failed: ${e.message}")
+                    lastError.set(e)
+                    if (failures.incrementAndGet() == services.size) channel.send(Res.AllFailed)
+                }
             }
         }
-        throw errors.last()
+        when (val res = channel.receive()) {
+            is Res.Ok<T> -> {
+                scope.cancel()
+                return res.value
+            }
+            Res.AllFailed -> {
+                scope.cancel()
+                throw lastError.get() ?: RuntimeException("All API instances failed")
+            }
+        }
+    }
+
+    private companion object {
+        private const val INSTANCE_TIMEOUT_MS = 6_000L
     }
 
     private fun logResolved(source: String, chainStart: Long, url: String, mimeType: String) {
