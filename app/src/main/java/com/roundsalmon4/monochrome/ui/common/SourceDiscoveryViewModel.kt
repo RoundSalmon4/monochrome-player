@@ -41,6 +41,7 @@ class SourceDiscoveryViewModel @Inject constructor(
 
     data class UiState(
         val sections: List<SourceFeed> = emptyList(),
+        val sources: List<DiscoverySource> = emptyList(),
         val refreshing: Boolean = false
     )
 
@@ -71,7 +72,7 @@ class SourceDiscoveryViewModel @Inject constructor(
                     }
                 }.awaitAll()
             }
-            _uiState.update { it.copy(sections = feeds, refreshing = false) }
+            _uiState.update { it.copy(sections = feeds, sources = sources, refreshing = false) }
             Log.i(TAG, "home feed sections: ${feeds.joinToString { "${it.source.displayName}=${it.items.size}" }}")
         }
     }

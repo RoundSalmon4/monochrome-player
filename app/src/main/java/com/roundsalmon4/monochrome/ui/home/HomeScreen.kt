@@ -129,8 +129,13 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxSize().padding(24.dp),
                                 contentAlignment = Alignment.Center
                             ) {
+                                val sourceNames = discoveryState.sources.joinToString { it.displayName }
                                 Text(
-                                    "No streaming sources are currently available. Pull to refresh.",
+                                    if (discoveryState.sources.isNotEmpty()) {
+                                        "$sourceNames are available but have no feed yet. Use Search to explore."
+                                    } else {
+                                        "No streaming sources are currently available. Pull to refresh."
+                                    },
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

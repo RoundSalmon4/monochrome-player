@@ -42,9 +42,13 @@ class SoundCloudSource @Inject constructor(
     }
 
     override suspend fun homeFeed(limit: Int): List<DiscoveredItem> {
-        val charts = client.chartsRaw(limit).orEmpty()
-        val items = charts.mapNotNull { toTrackItem(it) }
-        Log.i(TAG, "homeFeed: ${items.size} trending item(s)")
+        val raw = client.popularRaw(limit).orEmpty().ifEmpty {
+            Log.w(TAG, "/mixed-selections empty, trying legacy charts")
+            client.chartsRaw(limit).orEmpty()
+        }
+        val items = raw.mapNotNull { toTrackItem(it) }
+        if (items.isEmpty()) Log.w(TAG, "homeFeed: no trending items available for limit=$limit")
+        else Log.i(TAG, "homeFeed: ${items.size} trending item(s)")
         return items
     }
 

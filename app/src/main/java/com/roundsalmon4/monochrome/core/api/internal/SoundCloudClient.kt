@@ -122,6 +122,25 @@ class SoundCloudClient @Inject constructor(
         }.getOrNull()?.take(limit)
     }
 
+    /**
+     * Fallback popular feed via /mixed-selections ("Popular Tracks of the Week").
+     * The legacy /charts endpoint has been retired (404), so discovery falls back here.
+     */
+    internal suspend fun popularRaw(limit: Int): List<Map<String, Any?>>? {
+        val id = getValidClientId() ?: return null
+        val url = "https://api-v2.soundcloud.com/mixed-selections?client_id=$id&limit=$limit"
+        val body = httpGetText(url) ?: return null
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            val sections = gson.fromJson(body, Map::class.java)["data"] as? List<Map<String, Any?>>
+            sections.orEmpty().flatMap { section ->
+                ((section["data"] as? List<Map<String, Any?>>).orEmpty()).mapNotNull { obj ->
+                    obj["track"] as? Map<String, Any?>
+                }
+            }
+        }.getOrNull()?.take(limit)
+    }
+
     /** Resolves a stream for an arbitrary track map (used by the discovery layer). */
     internal suspend fun resolveFromMap(track: Map<String, Any?>): Pair<String, String>? {
         val id = getValidClientId() ?: return null
