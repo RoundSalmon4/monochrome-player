@@ -56,13 +56,14 @@ class JioSaavnClient @Inject constructor(
     @Volatile
     var wasNotFound: Boolean = false
 
-    private data class Song(
+    internal data class Song(
         val id: String,
         val name: String,
         val artists: String,
         val album: String,
         val durationSec: Int?,
-        val link320: String?
+        val link320: String?,
+        val image: String = ""
     )
 
     suspend fun getStreamUrl(
@@ -140,7 +141,8 @@ class JioSaavnClient @Inject constructor(
                     artists = decodeEntities(m["primary_artists"]?.toString()).orEmpty(),
                     album = decodeEntities(m["album"]?.toString()).orEmpty(),
                     durationSec = parseDuration(m["duration"]?.toString()),
-                    link320 = link
+                    link320 = link,
+                    image = imageUrl(m["image"]?.toString())
                 )
             }
         }.getOrElse { e -> Log.w(TAG, "Search parse failed: ${e.message}"); null }
@@ -267,6 +269,12 @@ class JioSaavnClient @Inject constructor(
             }
             else -> value.toIntOrNull()
         }
+    }
+
+    private fun imageUrl(raw: String?): String {
+        if (raw.isNullOrBlank()) return ""
+        val https = if (raw.startsWith("http://")) raw.replaceFirst("http://", "https://") else raw
+        return https.replace(Regex("(?:50|150)x(?:50|150)"), "500x500")
     }
 
     private fun decodeEntities(value: String?): String = (value ?: "")

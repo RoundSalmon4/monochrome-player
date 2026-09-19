@@ -159,20 +159,37 @@ class PlayerViewModel @Inject constructor(
             val playStart = System.currentTimeMillis()
             Log.i("ChromePlayer-Player", "playTrack: '${track.title}' - ${track.artistName} (id=${track.id})")
             try {
-                val streamUrl = tidalApi.getTrackStreamUrl(track)
-                Log.i(
-                    "ChromePlayer-Player",
-                    "Stream resolved in ${System.currentTimeMillis() - playStart}ms: mime=${streamUrl.mimeType} url=${streamUrl.url.take(140)}"
-                )
                 val saved = historyDao.getById(track.id)
                 val resumeMs = if (saved != null && saved.positionMs in 1 until (track.durationMs - RESUME_SKIP_END_MS))
                     saved.positionMs else 0L
-                playerController.play(
-                    url = streamUrl.url, mimeType = streamUrl.mimeType,
-                    startPositionMs = resumeMs,
-                    title = track.title, artist = track.artistName,
-                    album = track.albumTitle, artworkUrl = track.coverUrl
-                )
+
+                val directUrl = track.directStreamUrl
+                if (directUrl != null) {
+                    // Pre-resolved stream (e.g. from a native discovery source):
+                    // bypass the availability chain entirely.
+                    Log.i(
+                        "ChromePlayer-Player",
+                        "Playing pre-resolved direct stream (${track.directMimeType}) for '${track.title}'"
+                    )
+                    playerController.play(
+                        url = directUrl, mimeType = track.directMimeType ?: "audio/mpeg",
+                        startPositionMs = resumeMs,
+                        title = track.title, artist = track.artistName,
+                        album = track.albumTitle, artworkUrl = track.coverUrl
+                    )
+                } else {
+                    val streamUrl = tidalApi.getTrackStreamUrl(track)
+                    Log.i(
+                        "ChromePlayer-Player",
+                        "Stream resolved in ${System.currentTimeMillis() - playStart}ms: mime=${streamUrl.mimeType} url=${streamUrl.url.take(140)}"
+                    )
+                    playerController.play(
+                        url = streamUrl.url, mimeType = streamUrl.mimeType,
+                        startPositionMs = resumeMs,
+                        title = track.title, artist = track.artistName,
+                        album = track.albumTitle, artworkUrl = track.coverUrl
+                    )
+                }
                 PlaybackService.start(playerController, context)
                 playerStateManager.updateTrackInfo(track.id, track.title, track.artistName, track.coverUrl)
                 historyDao.upsert(

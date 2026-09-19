@@ -34,7 +34,9 @@ data class Track(
     val coverUrl: String,
     val durationMs: Long = 0L,
     val trackNumber: Int = 0,
-    val isrc: String = ""
+    val isrc: String = "",
+    val directStreamUrl: String? = null,
+    val directMimeType: String? = null
 )
 
 data class StreamUrl(

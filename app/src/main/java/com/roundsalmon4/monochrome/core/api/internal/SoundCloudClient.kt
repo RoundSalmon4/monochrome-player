@@ -1,4 +1,4 @@
-package com.roundsalmon4.monochrome.core.api.internal
+﻿package com.roundsalmon4.monochrome.core.api.internal
 
 import android.util.Log
 import com.google.gson.Gson
@@ -67,11 +67,38 @@ class SoundCloudClient @Inject constructor(
         return SoundCloudHealth(true, "stream ok (${stream.second})")
     }
 
-    private fun parseCollection(body: String): List<Map<String, Any?>>? = runCatching {
+    internal fun parseCollection(body: String): List<Map<String, Any?>>? = runCatching {
         val root = gson.fromJson<Map<String, Any?>>(body, object : TypeToken<Map<String, Any?>>() {}.type)
         @Suppress("UNCHECKED_CAST")
         root["collection"] as? List<Map<String, Any?>>
     }.getOrNull()
+
+    /** Raw search results for the generic discovery layer. */
+    internal suspend fun searchRaw(query: String, limit: Int): List<Map<String, Any?>>? {
+        val id = getValidClientId() ?: return null
+        val body = searchTracks(query, id) ?: return null
+        return parseCollection(body)?.take(limit)
+    }
+
+    /** Raw track maps from the trending/top charts for the generic discovery layer. */
+    internal suspend fun chartsRaw(limit: Int): List<Map<String, Any?>>? {
+        val id = getValidClientId() ?: return null
+        val url = "https://api-v2.soundcloud.com/charts?kind=top&genre=soundcloud:genres:all-music&limit=$limit&client_id=$id"
+        val body = httpGetText(url) ?: return null
+        return runCatching {
+            val collection = gson.fromJson(body, Map::class.java)["collection"] as? List<Map<String, Any?>>
+            collection?.mapNotNull { element ->
+                val track = element["track"] as? Map<String, Any?>
+                if (track != null) track else (element["playlist"] as? Map<String, Any?>)?.let { it }
+            }
+        }.getOrNull()?.take(limit)
+    }
+
+    /** Resolves a stream for an arbitrary track map (used by the discovery layer). */
+    internal suspend fun resolveFromMap(track: Map<String, Any?>): Pair<String, String>? {
+        val id = getValidClientId() ?: return null
+        return resolveStream(track, id)
+    }
 
     suspend fun getStreamUrl(
         title: String,
@@ -178,7 +205,7 @@ class SoundCloudClient @Inject constructor(
      * `/tracks/{id}/streams` endpoint was retired and now returns 404).
      * Prefers a progressive (mp3) transcoding, falling back to HLS.
      */
-    private suspend fun resolveStream(track: Map<String, Any?>, clientId: String): Pair<String, String>? {
+    internal suspend fun resolveStream(track: Map<String, Any?>, clientId: String): Pair<String, String>? {
         val media = track["media"] as? Map<*, *>
         val transcodings = media?.get("transcodings") as? List<*>
         if (transcodings.isNullOrEmpty()) {
@@ -222,7 +249,7 @@ class SoundCloudClient @Inject constructor(
         return streamUrl to mime
     }
 
-    private suspend fun httpGetText(url: String): String? {
+    internal suspend fun httpGetText(url: String): String? {
         return try {
             val req = Request.Builder().url(url)
                 .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 ChromePlayer/0.1")
@@ -239,7 +266,7 @@ class SoundCloudClient @Inject constructor(
         }
     }
 
-    private suspend fun getValidClientId(force: Boolean = false): String? {
+    internal suspend fun getValidClientId(force: Boolean = false): String? {
         if (!force) {
             clientId?.let { return it }
         } else {
@@ -318,7 +345,7 @@ class SoundCloudClient @Inject constructor(
     }
 
     /** Gson parses JSON numbers as Double, which stringifies large IDs in scientific notation. */
-    private fun numericAwareId(raw: Any?): String? = when (raw) {
+    internal fun numericAwareId(raw: Any?): String? = when (raw) {
         is Number -> raw.toLong().toString()
         else -> raw?.toString()?.takeIf { it.isNotBlank() }
     }
@@ -336,3 +363,4 @@ class SoundCloudClient @Inject constructor(
         return candidates.firstOrNull()
     }
 }
+

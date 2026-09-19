@@ -147,10 +147,11 @@ fun AppNavigation(
                 startDestination = Route.Home
             ) {
                 composable<Route.Home> {
-                    HomeScreen(
-                        onAlbumClick = { navController.navigate(Route.Album(it)) },
-                        onArtistClick = { navController.navigate(Route.Artist(it)) }
-                    )
+HomeScreen(
+                    onAlbumClick = { navController.navigate(Route.Album(it)) },
+                    onArtistClick = { navController.navigate(Route.Artist(it)) },
+                    onPlayItems = { tracks, index -> playTracks(tracks, index) }
+                )
                 }
 
                 composable<Route.Player> {
