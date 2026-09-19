@@ -51,9 +51,16 @@ fun SearchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val albumStatus by availabilityViewModel.albumStatus.collectAsStateWithLifecycle()
+    val pendingSourcePlay by viewModel.pendingSourcePlay.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.albums) {
         availabilityViewModel.checkAlbums(state.albums)
+    }
+    LaunchedEffect(pendingSourcePlay) {
+        pendingSourcePlay?.let { (tracks, index) ->
+            onTrackClick(tracks, index)
+            viewModel.consumePendingSourcePlay()
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -85,6 +92,24 @@ fun SearchScreen(
             }
             else -> {
                 LazyColumn {
+                    // Native source results first: everything here is directly playable.
+                    state.sourceSections.forEach { section ->
+                        item { Text(section.source.displayName, style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+                        items(section.items, key = { it.id }) { item ->
+                            ListItem(
+                                headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                supportingContent = { Text(item.artist) },
+                                leadingContent = {
+                                    AsyncImage(model = item.artworkUrl, contentDescription = null,
+                                        modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)
+                                },
+                                modifier = Modifier.clickable {
+                                    viewModel.playSourceItems(section.source, section.items, section.items.indexOf(item))
+                                }
+                            )
+                        }
+                    }
                     if (state.artists.isNotEmpty()) {
                         item { Text("Artists", style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
