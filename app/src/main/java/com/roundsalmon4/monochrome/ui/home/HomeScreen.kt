@@ -187,7 +187,7 @@ private fun NewReleaseCard(album: Album, status: Availability, onClick: () -> Un
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp, end = 4.dp)
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp)
         )
     }
 }
