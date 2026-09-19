@@ -31,7 +31,7 @@ class JioSaavnSource @Inject constructor(
         val now = System.currentTimeMillis()
         cachedAvailable?.let { if (now - cachedAt < AVAILABILITY_TTL_MS) return it }
         val available = try {
-            client.search("a", limit = 1)
+            client.searchSongs("a", limit = 1)
             true
         } catch (e: Exception) {
             Log.w(TAG, "availability probe failed: ${e.message}")
@@ -46,7 +46,7 @@ class JioSaavnSource @Inject constructor(
     override suspend fun homeFeed(limit: Int): List<DiscoveredItem> = emptyList()
 
     override suspend fun search(query: String, limit: Int): List<DiscoveredItem> {
-        val songs = client.search(query, limit = limit.coerceAtMost(20))
+        val songs = client.searchSongs(query, limit)
         return songs.mapNotNull { s ->
             sessionItems[s.id] = s
             DiscoveredItem(

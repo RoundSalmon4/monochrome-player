@@ -100,6 +100,10 @@ class JioSaavnClient @Inject constructor(
 
     // ------------------------------------------------------------------ search
 
+    /** Catalog search for the discovery layer (internal; exposes top results). */
+    internal suspend fun searchSongs(query: String, limit: Int): List<Song> =
+        search(query).orEmpty().take(limit.coerceIn(1, 20))
+
     private suspend fun search(query: String): List<Song>? {
         val url = "$BASE_URL/api.php?__call=search.getResults&_format=json&_marker=0&ctx=web6dot0&n=20&p=1&q=" +
             java.net.URLEncoder.encode(query, "UTF-8")
