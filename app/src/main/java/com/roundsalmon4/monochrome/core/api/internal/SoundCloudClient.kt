@@ -80,6 +80,34 @@ class SoundCloudClient @Inject constructor(
         return parseCollection(body)?.take(limit)
     }
 
+    /** Raw search results from a named /search/<resource> endpoint for the discovery layer. */
+    internal suspend fun searchEndpointRaw(resource: String, query: String, limit: Int): List<Map<String, Any?>>? {
+        if (resource.contains("&")) return null
+        val id = getValidClientId() ?: return null
+        val url = "https://api-v2.soundcloud.com/search/$resource?q=${java.net.URLEncoder.encode(query, "UTF-8")}&client_id=$id&limit=$limit"
+        val body = httpGetText(url) ?: return null
+        return parseCollection(body)
+    }
+
+    /** The tracks of a playlist/set (for playing a SET discovery item). */
+    internal suspend fun playlistTracksRaw(playlistId: String): List<Map<String, Any?>>? {
+        val id = getValidClientId() ?: return null
+        val url = "https://api-v2.soundcloud.com/playlists/$playlistId?client_id=$id"
+        val body = httpGetText(url) ?: return null
+        return runCatching {
+            @Suppress("UNCHECKED_CAST")
+            (gson.fromJson(body, Map::class.java)["tracks"] as? List<Map<String, Any?>>).orEmpty()
+        }.getOrNull()
+    }
+
+    /** An artist's tracks (for playing an ARTIST discovery item). */
+    internal suspend fun userTracksRaw(userId: String, limit: Int): List<Map<String, Any?>>? {
+        val id = getValidClientId() ?: return null
+        val url = "https://api-v2.soundcloud.com/users/$userId/tracks?client_id=$id&limit=$limit"
+        val body = httpGetText(url) ?: return null
+        return parseCollection(body)
+    }
+
     /** Raw track maps from the trending/top charts for the generic discovery layer. */
     internal suspend fun chartsRaw(limit: Int): List<Map<String, Any?>>? {
         val id = getValidClientId() ?: return null

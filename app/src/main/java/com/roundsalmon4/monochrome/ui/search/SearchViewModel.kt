@@ -120,6 +120,24 @@ class SearchViewModel @Inject constructor(
             val tracks = registry.resolveQueue(source, items)
             if (tracks.isNotEmpty()) {
                 _pendingSourcePlay.value = tracks to startIndex.coerceIn(0, tracks.size - 1)
+            } else {
+                Log.w("ChromePlayer-Discovery", "playSourceItems: nothing resolvable from ${source.displayName}")
+            }
+        }
+    }
+
+    /** Play a container (SET/ARTIST) by expanding it into a queue of its tracks. */
+    fun playContainer(source: DiscoverySource, item: DiscoveredItem) {
+        if (item.kind == com.roundsalmon4.monochrome.core.discovery.DiscoveredKind.TRACK) {
+            playSourceItems(source, listOf(item), 0)
+            return
+        }
+        viewModelScope.launch {
+            val tracks = registry.resolveContained(source, item)
+            if (tracks.isNotEmpty()) {
+                _pendingSourcePlay.value = tracks to 0
+            } else {
+                Log.w("ChromePlayer-Discovery", "playContainer: '${item.title}' expanded to nothing")
             }
         }
     }

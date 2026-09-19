@@ -1,5 +1,8 @@
 package com.roundsalmon4.monochrome.core.discovery
 
+/** What a discovered item represents in a source's catalog. */
+enum class DiscoveredKind { TRACK, SET, ARTIST }
+
 /** A catalog item surfaced by a [DiscoverySource]. Playable through that source. */
 data class DiscoveredItem(
     val id: String,
@@ -7,7 +10,8 @@ data class DiscoveredItem(
     val artist: String,
     val albumTitle: String? = null,
     val artworkUrl: String = "",
-    val durationMs: Long = 0L
+    val durationMs: Long = 0L,
+    val kind: DiscoveredKind = DiscoveredKind.TRACK
 )
 
 /** A directly playable stream, already resolved for playback. */
@@ -28,9 +32,6 @@ interface DiscoverySource {
     /** Cheap probe of whether this backend can serve content right now. */
     suspend fun isAvailable(): Boolean
 
-    /** Rest of the availability check result for the UI (e.g. detailed health). */
-    suspend fun availabilityDetail(): String = if (isAvailable()) "available" else "unavailable"
-
     /** Trending/current items; empty by default when a source has no feed. */
     suspend fun homeFeed(limit: Int): List<DiscoveredItem> = emptyList()
 
@@ -39,4 +40,10 @@ interface DiscoverySource {
 
     /** Resolve [item] to a direct stream URL this source can play. */
     suspend fun resolveStream(item: DiscoveredItem): ResolvedStream?
+
+    /**
+     * For container items ([DiscoveredKind.SET]/[DiscoveredKind.ARTIST]), the
+     * concrete playable items that make it up. Defaults to the item itself.
+     */
+    suspend fun itemsFor(item: DiscoveredItem): List<DiscoveredItem> = listOf(item)
 }

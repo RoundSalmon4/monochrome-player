@@ -37,6 +37,7 @@ import com.roundsalmon4.monochrome.core.api.Availability
 import com.roundsalmon4.monochrome.core.api.model.Album
 import com.roundsalmon4.monochrome.core.api.model.Artist
 import com.roundsalmon4.monochrome.core.api.model.Track
+import com.roundsalmon4.monochrome.core.discovery.DiscoveredKind
 import com.roundsalmon4.monochrome.ui.common.AlbumAvailabilityViewModel
 import com.roundsalmon4.monochrome.ui.common.AlbumStatusDot
 
@@ -96,18 +97,28 @@ fun SearchScreen(
                     state.sourceSections.forEach { section ->
                         item { Text(section.source.displayName, style = MaterialTheme.typography.titleSmall,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
-                        items(section.items, key = { it.id }) { item ->
-                            ListItem(
-                                headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                supportingContent = { Text(item.artist) },
-                                leadingContent = {
-                                    AsyncImage(model = item.artworkUrl, contentDescription = null,
-                                        modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)
-                                },
-                                modifier = Modifier.clickable {
-                                    viewModel.playSourceItems(section.source, section.items, section.items.indexOf(item))
-                                }
-                            )
+                        listOf(DiscoveredKind.TRACK, DiscoveredKind.SET, DiscoveredKind.ARTIST).forEach { kind ->
+                            val group = section.items.filter { it.kind == kind }
+                            if (group.isEmpty()) return@forEach
+                            item { Text(kindLabel(kind), style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 2.dp)) }
+                            items(group, key = { it.id }) { item ->
+                                ListItem(
+                                    headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    supportingContent = { Text(item.artist) },
+                                    leadingContent = {
+                                        AsyncImage(model = item.artworkUrl, contentDescription = null,
+                                            modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)
+                                    },
+                                    modifier = Modifier.clickable {
+                                        if (item.kind == DiscoveredKind.TRACK) {
+                                            viewModel.playSourceItems(section.source, section.items, section.items.indexOf(item))
+                                        } else {
+                                            viewModel.playContainer(section.source, item)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                     if (state.artists.isNotEmpty()) {
@@ -172,4 +183,10 @@ fun SearchScreen(
             }
         }
     }
+}
+
+private fun kindLabel(kind: DiscoveredKind): String = when (kind) {
+    DiscoveredKind.TRACK -> "Tracks"
+    DiscoveredKind.SET -> "Sets"
+    DiscoveredKind.ARTIST -> "Artists"
 }

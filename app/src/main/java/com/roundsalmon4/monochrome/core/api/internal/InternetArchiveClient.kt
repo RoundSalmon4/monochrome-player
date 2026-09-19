@@ -192,4 +192,65 @@ class InternetArchiveClient @Inject constructor(
         val title: String,
         val quality: Int
     )
+
+    // ------------------------------------------------------------------ discovery
+
+    internal data class ArchivedItem(
+        val id: String,
+        val title: String,
+        val creator: String,
+        val coverUrl: String
+    )
+
+    /** Catalog search used by the generic discovery layer. */
+    internal suspend fun searchItems(query: String, limit: Int): List<ArchivedItem> {
+        val safe = query.replace("\"", "'")
+        val url = buildString {
+            append(SEARCH_URL).append("?q=").append(java.net.URLEncoder.encode("($safe) AND mediatype:audio", "UTF-8"))
+            append("&fl%5B%5D=identifier&fl%5B%5D=title&fl%5B%5D=creator&rows=").append(limit.coerceIn(1, 30))
+            append("&output=json")
+        }
+        val body = fetch(url) ?: return emptyList()
+        val items = runCatching {
+            val root = gson.fromJson<Map<String, Any?>>(body, object : TypeToken<Map<String, Any?>>() {}.type)
+            val docs = ((root["response"] as? Map<*, *>)?.get("docs") as? List<Map<String, Any?>>).orEmpty()
+            docs.mapNotNull { doc ->
+                val id = doc["identifier"]?.toString()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ArchivedItem(
+                    id = id,
+                    title = doc["title"]?.toString() ?: id,
+                    creator = doc["creator"]?.toString().orEmpty(),
+                    coverUrl = "https://archive.org/services/img/$id"
+                )
+            }
+        }.getOrElse { e ->
+            Log.w(TAG, "Internet Archive: search parse failed: ${e.message}")
+            emptyList()
+        }
+        Log.d(TAG, "searchItems('$query') -> ${items.size} item(s)")
+        return items
+    }
+
+    /** Picks the highest-quality audio file in an item for the discovery layer. */
+    internal suspend fun resolveItem(identifier: String): Pair<String, String>? {
+        val body = fetch(METADATA_URL + identifier) ?: return null
+        val root = runCatching {
+            gson.fromJson<Map<String, Any?>>(body, object : TypeToken<Map<String, Any?>>() {}.type)
+        }.getOrNull() ?: return null
+        val files = root["files"] as? List<Map<String, Any?>> ?: return null
+        var best: Pair<String, String>? = null
+        var bestRank = 0
+        for (file in files.take(MAX_FILES)) {
+            val name = file["name"]?.toString() ?: continue
+            val mime = mimeForName(name) ?: continue
+            val rank = qualityRank(mime)
+            if (rank > bestRank) {
+                bestRank = rank
+                best = downloadUrl(identifier, name) to mime
+            }
+        }
+        if (best != null) Log.d(TAG, "resolveItem($identifier) -> ${best.first} (${best.second})")
+        else Log.d(TAG, "resolveItem($identifier) -> no audio file")
+        return best
+    }
 }
