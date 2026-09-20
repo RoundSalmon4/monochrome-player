@@ -103,22 +103,11 @@ operate, and third-party services may change or revoke access at any time.
 
 ## License
 
-ChromePlayer is distributed under the MIT License (see `LICENSE`), with two
-files derived from GPL-3.0-licensed projects and therefore distributed under
-the **GNU GPL v3.0**:
+ChromePlayer is licensed under the **GNU General Public License v3.0**
+(see `LICENSE`). The whole project is distributed under GPL-3.0, which covers
+the portions originally derived from **Meld** and **Stash** as well as the
+MIT lineage from **PhoneTube** (all GPL-3.0-compatible).
 
-- `QobuzProxyClient.kt` — derived from **Meld** (GPL-3.0)
-- `JioSaavnClient.kt` — derived from **Stash** (GPL-3.0)
-
-Full attribution, dependency licenses, and the GPL notice are in
-`THIRD_PARTY_NOTICES.md`, and the in-app **Settings > About > Credits &
-Licenses** screen reflects the same.
-
-**Licensing decision for distributors:** combining MIT original code with
-GPL-3.0-derived modules into a single APK creates a combined work. To stay
-fully compliant you must either (a) distribute the whole app under GPL-3.0,
-or (b) replace the two GPL-derived files with independently written
-implementations to keep the project pure MIT, or (c) keep them clearly marked
-as GPL-3.0 and provide their corresponding source (as done in this repo) for
-each distribution. This project currently follows (c); contributors reviewing
-for redistribution should pick one approach.
+Third-party libraries retain their own licenses (all Apache-2.0 and thus
+GPL-compatible); full attribution is in `THIRD_PARTY_NOTICES.md` and the
+in-app **Settings > About > Credits & Licenses** screen.

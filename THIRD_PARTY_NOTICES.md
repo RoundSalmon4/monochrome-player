@@ -1,7 +1,8 @@
 # Third-Party Notices
 
-ChromePlayer is licensed under the MIT License (see `LICENSE`) **except** for
-the GPL-3.0-derived components noted below, which remain under the GNU GPL v3.
+ChromePlayer is licensed under the **GNU General Public License v3.0**
+(see `LICENSE`). Third-party libraries and projects keep their own licenses
+(all used here are GPL-compatible: Apache-2.0 and MIT).
 
 ## Directly-derived works (code/project lineage)
 
@@ -23,11 +24,8 @@ distributed under the GNU General Public License v3.0:
 
 Full text of the GPL: https://www.gnu.org/licenses/gpl-3.0.txt
 
-Observe that by choosing to distribute the combined work (an APK containing
-both MIT and GPL-3.0 code), you MUST comply with the GPL-3.0 for the
-GPL-derived portions: provide corresponding source for those files, retain
-their license notices, and ensure the combination is distributable under
-GPL-compatible terms. See the "Licensing decision" note in the project README.
+ChromePlayer as a whole is distributed under the GNU GPL v3.0, so these files
+are covered by the app's own license.
 
 ## Third-party libraries (bundled via Gradle)
 

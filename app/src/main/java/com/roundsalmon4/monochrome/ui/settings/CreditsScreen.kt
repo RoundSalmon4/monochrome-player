@@ -41,6 +41,13 @@ fun CreditsScreen(onBackClick: () -> Unit) {
         LazyColumn(modifier = Modifier.padding(innerPadding)) {
             item {
                 CreditsItem(
+                    dependencyName = "ChromePlayer",
+                    dependencyPackageName = "com.roundsalmon4.monochrome - this application",
+                    dependencyLicense = GPL_3_0,
+                )
+            }
+            item {
+                CreditsItem(
                     dependencyName = "PhoneTube",
                     dependencyPackageName = "RoundSalmon4/PhoneTube (SmartTube lineage) - ChromePlayer's original code lineage; the playback service and PiP logic follow PhoneTube's MIT implementation",
                     dependencyLicense = MIT_LICENSE,
