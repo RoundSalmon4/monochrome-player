@@ -103,4 +103,22 @@ operate, and third-party services may change or revoke access at any time.
 
 ## License
 
-MIT
+ChromePlayer is distributed under the MIT License (see `LICENSE`), with two
+files derived from GPL-3.0-licensed projects and therefore distributed under
+the **GNU GPL v3.0**:
+
+- `QobuzProxyClient.kt` — derived from **Meld** (GPL-3.0)
+- `JioSaavnClient.kt` — derived from **Stash** (GPL-3.0)
+
+Full attribution, dependency licenses, and the GPL notice are in
+`THIRD_PARTY_NOTICES.md`, and the in-app **Settings > About > Credits &
+Licenses** screen reflects the same.
+
+**Licensing decision for distributors:** combining MIT original code with
+GPL-3.0-derived modules into a single APK creates a combined work. To stay
+fully compliant you must either (a) distribute the whole app under GPL-3.0,
+or (b) replace the two GPL-derived files with independently written
+implementations to keep the project pure MIT, or (c) keep them clearly marked
+as GPL-3.0 and provide their corresponding source (as done in this repo) for
+each distribution. This project currently follows (c); contributors reviewing
+for redistribution should pick one approach.

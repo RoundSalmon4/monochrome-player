@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2026 RoundSalmon4
+ *
+ * Derived from the PhoneTube playback service (https://github.com/RoundSalmon4/PhoneTube),
+ * MIT-licensed (c) 2020-present yuliskov, (c) 2025-present RoundSalmon4. MIT license text
+ * is reproduced in the repository LICENSE file.
+ */
 package com.roundsalmon4.monochrome.player.service
 
 import android.app.Notification

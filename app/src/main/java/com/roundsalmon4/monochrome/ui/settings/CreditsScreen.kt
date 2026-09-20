@@ -41,6 +41,13 @@ fun CreditsScreen(onBackClick: () -> Unit) {
         LazyColumn(modifier = Modifier.padding(innerPadding)) {
             item {
                 CreditsItem(
+                    dependencyName = "PhoneTube",
+                    dependencyPackageName = "RoundSalmon4/PhoneTube (SmartTube lineage) - ChromePlayer's original code lineage; the playback service and PiP logic follow PhoneTube's MIT implementation",
+                    dependencyLicense = MIT_LICENSE,
+                )
+            }
+            item {
+                CreditsItem(
                     dependencyName = "Monochrome",
                     dependencyPackageName = "monochrome-music/monochrome - streaming API conventions and the community instance pool ChromePlayer builds on",
                     dependencyLicense = APACHE_2_0,
@@ -58,6 +65,13 @@ fun CreditsScreen(onBackClick: () -> Unit) {
                     dependencyName = "Stash",
                     dependencyPackageName = "rawnaldclark/Stash - reference for the JioSaavn DES-decrypted media template and the conservative track matcher used by the JioSaavn fallback",
                     dependencyLicense = GPL_3_0,
+                )
+            }
+            item {
+                CreditsItem(
+                    dependencyName = "AppVerifierBG",
+                    dependencyPackageName = "RoundSalmon4/AppVerifierBG - pattern for ChromePlayer's Credits & Licenses screen (same author)",
+                    dependencyLicense = MIT_LICENSE,
                 )
             }
             item {

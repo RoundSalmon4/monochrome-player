@@ -1,3 +1,15 @@
+/*
+ * Copyright (c) 2026 RoundSalmon4
+ *
+ * This file is a DERIVATIVE WORK of the JioSaavn integration from Stash
+ * (https://github.com/rawnaldclark/Stash), which is licensed under the
+ * GNU General Public License v3.0. Accordingly, this file is distributed
+ * under the GNU GPL v3.0: https://www.gnu.org/licenses/gpl-3.0.txt
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GPL-3.0 for details.
+ */
 package com.roundsalmon4.monochrome.core.api.internal
 
 import android.util.Base64

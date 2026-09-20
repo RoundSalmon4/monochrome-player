@@ -11,6 +11,16 @@ internal const val APACHE_2_0 =
         "See the License for the specific language governing permissions and\n" +
         "limitations under the License."
 
+internal const val MIT_LICENSE =
+    "Copyright (c) 2020-present yuliskov\n" +
+        "Copyright (c) 2025-present RoundSalmon4\n\n" +
+        "Permission is hereby granted, free of charge, to any person obtaining a copy of this\n" +
+        "software and associated documentation files (the \"Software\"), to deal in the Software\n" +
+        "without restriction, including without limitation the rights to use, copy, modify, merge,\n" +
+        "publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons\n" +
+        "to whom the Software is furnished to do so.\n\n" +
+        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED."
+
 internal const val GPL_3_0 =
     "This project is licensed under the GNU General Public License, Version 3 (GPL-3.0).\n" +
         "You may obtain a copy of the License at\n\n" +
