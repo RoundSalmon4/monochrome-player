@@ -22,7 +22,6 @@ private val Context.playerDataStore: DataStore<Preferences> by preferencesDataSt
 
 private object Keys {
     val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
-    val DEFAULT_QUALITY = stringPreferencesKey("default_quality")
     val RESUME_PLAYBACK = booleanPreferencesKey("resume_playback")
     val SHOW_MINI_PLAYER = booleanPreferencesKey("show_mini_player")
     val THEME_MODE = stringPreferencesKey("theme_mode")
@@ -36,7 +35,6 @@ private object Keys {
     val AMAZON_JWT_EXPIRY = stringPreferencesKey("amazon_jwt_expiry")
     val MONOCHROME_JWT = stringPreferencesKey("monochrome_jwt")
     val MONOCHROME_JWT_EXPIRY = stringPreferencesKey("monochrome_jwt_expiry")
-    val MONOCHROME_PLAYBACK_ENABLED = booleanPreferencesKey("monochrome_playback_enabled")
     val SAVED_QUEUE = stringPreferencesKey("saved_queue")
     val VOLUME = floatPreferencesKey("volume")
     val UNIFIED_JWT = stringPreferencesKey("unified_jwt")
@@ -45,7 +43,6 @@ private object Keys {
 
 data class PreferencesUiState(
     val playbackSpeed: Float = 1.0f,
-    val defaultQuality: String = "AUTO",
     val resumePlayback: Boolean = true,
     val showMiniPlayer: Boolean = true,
     val themeMode: String = "SYSTEM",
@@ -66,7 +63,6 @@ class PlayerPreferences @Inject constructor(
     val uiState: Flow<PreferencesUiState> = context.playerDataStore.data.map { prefs ->
         PreferencesUiState(
             playbackSpeed = prefs[Keys.PLAYBACK_SPEED] ?: 1.0f,
-            defaultQuality = prefs[Keys.DEFAULT_QUALITY] ?: "AUTO",
             resumePlayback = prefs[Keys.RESUME_PLAYBACK] ?: true,
             showMiniPlayer = prefs[Keys.SHOW_MINI_PLAYER] ?: true,
             themeMode = prefs[Keys.THEME_MODE] ?: "SYSTEM",
@@ -86,10 +82,6 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun setPlaybackSpeed(speed: Float) {
         context.playerDataStore.edit { it[Keys.PLAYBACK_SPEED] = speed }
-    }
-
-    suspend fun setDefaultQuality(quality: String) {
-        context.playerDataStore.edit { it[Keys.DEFAULT_QUALITY] = quality }
     }
 
     suspend fun setResumePlayback(enabled: Boolean) {
@@ -155,13 +147,6 @@ class PlayerPreferences @Inject constructor(
         val expiry = prefs[Keys.MONOCHROME_JWT_EXPIRY]?.toLongOrNull() ?: 0L
         return Pair(jwt, expiry)
     }
-
-    suspend fun setMonochromePlaybackEnabled(enabled: Boolean) {
-        context.playerDataStore.edit { it[Keys.MONOCHROME_PLAYBACK_ENABLED] = enabled }
-    }
-
-    suspend fun isMonochromePlaybackEnabled(): Boolean =
-        context.playerDataStore.data.first()[Keys.MONOCHROME_PLAYBACK_ENABLED] ?: true
 
     suspend fun setSavedQueueJson(json: String?) {
         context.playerDataStore.edit {

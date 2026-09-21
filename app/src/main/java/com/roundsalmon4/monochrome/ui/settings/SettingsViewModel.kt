@@ -1,4 +1,4 @@
-package com.roundsalmon4.monochrome.ui.settings
+﻿package com.roundsalmon4.monochrome.ui.settings
 
 import android.content.Context
 import android.util.Log
@@ -82,7 +82,7 @@ class SettingsViewModel @Inject constructor(
 
         val exportData = ExportData(
             preferences = PreferencesExport(
-                playbackSpeed = prefs.playbackSpeed, defaultQuality = prefs.defaultQuality,
+                playbackSpeed = prefs.playbackSpeed,
                 resumePlayback = prefs.resumePlayback, showMiniPlayer = prefs.showMiniPlayer,
                 themeMode = prefs.themeMode, useAmoledTheme = prefs.useAmoledTheme,
                 primaryColor = prefs.primaryColor, secondaryColor = prefs.secondaryColor,
@@ -123,7 +123,6 @@ class SettingsViewModel @Inject constructor(
 
                 data.preferences?.let { p ->
                     playerPreferences.setPlaybackSpeed(p.playbackSpeed)
-                    playerPreferences.setDefaultQuality(p.defaultQuality)
                     playerPreferences.setResumePlayback(p.resumePlayback)
                     playerPreferences.setShowMiniPlayer(p.showMiniPlayer)
                     playerPreferences.setThemeMode(p.themeMode)
@@ -171,7 +170,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setPlaybackSpeed(speed: Float) = viewModelScope.launch { playerPreferences.setPlaybackSpeed(speed) }
-    fun setDefaultQuality(quality: String) = viewModelScope.launch { playerPreferences.setDefaultQuality(quality) }
     fun setResumePlayback(enabled: Boolean) = viewModelScope.launch { playerPreferences.setResumePlayback(enabled) }
     fun setShowMiniPlayer(enabled: Boolean) = viewModelScope.launch { playerPreferences.setShowMiniPlayer(enabled) }
     fun setThemeMode(mode: String) = viewModelScope.launch { playerPreferences.setThemeMode(mode) }
@@ -193,10 +191,6 @@ class SettingsViewModel @Inject constructor(
         } catch (_: Exception) { 0L }
         playerPreferences.setAmazonJwt(jwt, expiry)
         amazonMusicClient.setJwt(jwt, expiry)
-    }
-
-    fun setAmazonBypassToken(token: String) = viewModelScope.launch {
-        amazonMusicClient.setBypassToken(token)
     }
 
     fun refreshMonochromeSession() = viewModelScope.launch {
@@ -234,3 +228,4 @@ class SettingsViewModel @Inject constructor(
         _showClearPlaylistsDialog.value = false
     }
 }
+

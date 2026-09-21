@@ -238,9 +238,7 @@ class SoundCloudClient @Inject constructor(
             Log.d(TAG, "SoundCloud: stream resolved for track $trackId (${stream.second})")
             return MonochromeStreamResult(
                 url = stream.first,
-                mimeType = stream.second,
-                isrc = null,
-                title = trackTitle
+                mimeType = stream.second
             )
         }
         Log.w(TAG, "SoundCloud: no stream URL for matched track $trackId")

@@ -14,7 +14,6 @@ data class ExportData(
 @Serializable
 data class PreferencesExport(
     val playbackSpeed: Float = 1.0f,
-    val defaultQuality: String = "AUTO",
     val resumePlayback: Boolean = true,
     val showMiniPlayer: Boolean = true,
     val themeMode: String = "SYSTEM",

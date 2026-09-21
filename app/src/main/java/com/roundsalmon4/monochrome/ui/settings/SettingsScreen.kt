@@ -190,6 +190,13 @@ private fun PlayerSection(uiState: PreferencesUiState, viewModel: SettingsViewMo
             checked = uiState.backgroundAvailability,
             onCheckedChange = { viewModel.setBackgroundAvailability(it) }
         )
+
+        SwitchItem(
+            name = "Resume playback",
+            description = "Continue playing from the last saved position",
+            checked = uiState.resumePlayback,
+            onCheckedChange = { viewModel.setResumePlayback(it) }
+        )
     }
 }
 

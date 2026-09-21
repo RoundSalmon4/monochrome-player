@@ -60,7 +60,7 @@ class InternetArchiveClient @Inject constructor(
             if (file != null) {
                 val url = downloadUrl(id, file.name)
                 Log.i(TAG, "Internet Archive: matched ${file.mime} in item $id")
-                return MonochromeStreamResult(url = url, mimeType = file.mime, title = file.title)
+                return MonochromeStreamResult(url = url, mimeType = file.mime)
             }
         }
 

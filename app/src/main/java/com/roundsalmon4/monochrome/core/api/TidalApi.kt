@@ -394,9 +394,9 @@ class TidalApi @Inject constructor(
     private suspend fun getAmazonStreamUrl(trackId: String): String? {
         android.util.Log.d("ChromePlayer", "Amazon: trying track $trackId via Turnstile auth")
         try {
-            val result = amazonMusicClient.getStreamUrl(trackId)
-            if (result != null) android.util.Log.d("ChromePlayer", "Amazon: got stream URL")
-            return result?.url
+            val url = amazonMusicClient.getStreamUrl(trackId)
+            if (url != null) android.util.Log.d("ChromePlayer", "Amazon: got stream URL")
+            return url
         } catch (e: Exception) {
             android.util.Log.w("ChromePlayer", "Amazon: failed: ${e.message}")
         }

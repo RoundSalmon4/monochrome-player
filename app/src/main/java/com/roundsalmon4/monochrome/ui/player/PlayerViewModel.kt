@@ -160,8 +160,10 @@ class PlayerViewModel @Inject constructor(
             Log.i("ChromePlayer-Player", "playTrack: '${track.title}' - ${track.artistName} (id=${track.id})")
             try {
                 val saved = historyDao.getById(track.id)
-                val resumeMs = if (saved != null && saved.positionMs in 1 until (track.durationMs - RESUME_SKIP_END_MS))
-                    saved.positionMs else 0L
+                val resumeEnabled = playerPreferences.uiState.first().resumePlayback
+                val resumeMs = if (resumeEnabled && saved != null &&
+                    saved.positionMs in 1 until (track.durationMs - RESUME_SKIP_END_MS)
+                ) saved.positionMs else 0L
 
                 val directUrl = track.directStreamUrl
                 if (directUrl != null) {

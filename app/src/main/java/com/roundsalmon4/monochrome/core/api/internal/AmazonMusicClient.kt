@@ -23,13 +23,6 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 
-data class AmazonStreamResult(
-    val url: String,
-    val sourceUrl: String,
-    val decryptionKey: String?,
-    val keyId: String?
-)
-
 @Singleton
 class AmazonMusicClient @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -46,7 +39,6 @@ class AmazonMusicClient @Inject constructor(
     private val gson = Gson()
     private var cachedJwt: String? = null
     private var jwtExpiry: Long = 0L
-    private var bypassToken: String? = null
 
     @Volatile
     private var hostDeadUntil = 0L
@@ -56,9 +48,7 @@ class AmazonMusicClient @Inject constructor(
         Log.d(TAG, "JWT set, expires at $expiresAt")
     }
 
-    fun setBypassToken(token: String) { bypassToken = token; Log.d(TAG, "Bypass token set") }
-
-    suspend fun getStreamUrl(trackId: String): AmazonStreamResult? {
+    suspend fun getStreamUrl(trackId: String): String? {
         Log.d(TAG, "getStreamUrl: track=$trackId")
         if (!hostIsUp()) {
             Log.w(TAG, "API host unavailable, skipping (dead-domain fast fail)")
@@ -83,11 +73,7 @@ class AmazonMusicClient @Inject constructor(
                 val data = (raw["data"] as? Map<*, *>) ?: (raw["track"] as? Map<*, *>) ?: raw
                 val streamUrl = data["stream_url"]?.toString() ?: data["url"]?.toString() ?: return@use null
                 Log.d(TAG, "Got stream URL")
-                AmazonStreamResult(
-                    url = streamUrl, sourceUrl = streamUrl,
-                    decryptionKey = data["decryption_key"]?.toString(),
-                    keyId = null
-                )
+                streamUrl
             }
         }
     }
@@ -99,15 +85,7 @@ class AmazonMusicClient @Inject constructor(
             return cachedJwt
         }
 
-        // 2. Try bypass token
-        if (bypassToken != null) {
-            Log.d(TAG, "Trying bypass token")
-            val jwt = exchangeBypassForJwt(bypassToken!!)
-            if (jwt != null) { cachedJwt = jwt; jwtExpiry = System.currentTimeMillis() + 55 * 60 * 1000L; return jwt }
-            Log.w(TAG, "Bypass token failed to produce JWT")
-        }
-
-        // 3. Try WebView-based Turnstile
+        // 2. Try WebView-based Turnstile
         try {
             Log.d(TAG, "Launching WebView Turnstile")
             val token = withTimeout(20000L) { runTurnstile() }
@@ -131,25 +109,6 @@ class AmazonMusicClient @Inject constructor(
                 if (!resp.isSuccessful) return@use null
                 val data = gson.fromJson(resp.body?.string(), Map::class.java)
                 data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
-            }
-        }
-    }
-
-    private suspend fun exchangeBypassForJwt(bypass: String): String? {
-        val req = okhttp3.Request.Builder()
-            .url("$API_BASE/api/track/?id=1&quality=HD&bypass_token=$bypass")
-            .build()
-        return withContext(Dispatchers.IO) {
-            okHttpClient.newCall(req).execute().use { resp ->
-                if (resp.code == 428) {
-                    val body = FormBody.Builder().add("bypass_token", bypass).build()
-                    val exchangeReq = okhttp3.Request.Builder().url("$API_BASE/api/auth/turnstile").post(body).build()
-                    okHttpClient.newCall(exchangeReq).execute().use { exchangeResp ->
-                        if (!exchangeResp.isSuccessful) return@use null
-                        val data = gson.fromJson(exchangeResp.body?.string(), Map::class.java)
-                        data["jwt"]?.toString()?.takeIf { it.isNotBlank() }
-                    }
-                } else null
             }
         }
     }

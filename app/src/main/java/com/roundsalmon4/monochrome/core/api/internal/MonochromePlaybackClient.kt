@@ -15,9 +15,7 @@ import javax.inject.Singleton
 
 data class MonochromeStreamResult(
     val url: String,
-    val mimeType: String,
-    val isrc: String? = null,
-    val title: String? = null
+    val mimeType: String
 )
 
 @Singleton
@@ -99,9 +97,7 @@ class MonochromePlaybackClient @Inject constructor(
                 Log.d(TAG, "Got Monochrome Playback stream URL")
                 MonochromeStreamResult(
                     url = url,
-                    mimeType = raw["mime_type"]?.toString() ?: "audio/flac",
-                    isrc = returnedIsrc.ifBlank { null },
-                    title = returnedTitle.ifBlank { null }
+                    mimeType = raw["mime_type"]?.toString() ?: "audio/flac"
                 )
             }
         }
