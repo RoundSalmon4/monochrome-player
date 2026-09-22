@@ -65,18 +65,4 @@ class SourceDiscoveryRegistry @Inject constructor(
         Log.i(TAG, "resolved ${tracks.size}/${items.size} from ${source.displayName} in ${System.currentTimeMillis() - start}ms")
         return tracks
     }
-
-    /**
-     * Resolves a container item (SET/ARTIST) into a playable track queue by
-     * expanding it via [DiscoverySource.itemsFor] first.
-     */
-    suspend fun resolveContained(source: DiscoverySource, item: DiscoveredItem): List<Track> {
-        Log.d(TAG, "resolveContained: expanding ${item.kind} '${item.title}' from ${source.displayName}")
-        val concrete = source.itemsFor(item)
-        if (concrete.isEmpty()) {
-            Log.w(TAG, "resolveContained: '${item.title}' expanded to nothing")
-            return emptyList()
-        }
-        return resolveQueue(source, concrete)
-    }
 }

@@ -13,4 +13,14 @@ sealed interface Route {
     @Serializable data object Settings : Route
     @Serializable data object Credits : Route
     @Serializable data class PlaylistDetail(val playlistId: Long) : Route
+
+    /** A browseable, source-native collection (SoundCloud artist or set). */
+    @Serializable data class SourceCollection(
+        val sourceId: String,
+        val itemId: String,
+        val kind: String,
+        val title: String,
+        val artist: String = "",
+        val artworkUrl: String = ""
+    ) : Route
 }

@@ -41,6 +41,7 @@ import com.roundsalmon4.monochrome.ui.player.PlayerScreen
 import com.roundsalmon4.monochrome.ui.search.SearchScreen
 import com.roundsalmon4.monochrome.ui.settings.CreditsScreen
 import com.roundsalmon4.monochrome.ui.settings.SettingsScreen
+import com.roundsalmon4.monochrome.ui.source.SourceCollectionScreen
 
 data class BottomNavItem(val label: String, val icon: ImageVector, val route: Route)
 
@@ -162,7 +163,26 @@ HomeScreen(
                     SearchScreen(
                         onAlbumClick = { navController.navigate(Route.Album(it)) },
                         onArtistClick = { navController.navigate(Route.Artist(it)) },
-                        onTrackClick = playTracks
+                        onTrackClick = playTracks,
+                        onSourceCollection = { source, item ->
+                            navController.navigate(
+                                Route.SourceCollection(
+                                    sourceId = source.id,
+                                    itemId = item.id,
+                                    kind = item.kind.name,
+                                    title = item.title,
+                                    artist = item.artist,
+                                    artworkUrl = item.artworkUrl
+                                )
+                            )
+                        }
+                    )
+                }
+
+                composable<Route.SourceCollection> {
+                    SourceCollectionScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onPlayItems = playTracks
                     )
                 }
 

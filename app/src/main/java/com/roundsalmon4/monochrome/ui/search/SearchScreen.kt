@@ -38,6 +38,7 @@ import com.roundsalmon4.monochrome.core.api.model.Album
 import com.roundsalmon4.monochrome.core.api.model.Artist
 import com.roundsalmon4.monochrome.core.api.model.Track
 import com.roundsalmon4.monochrome.core.discovery.DiscoveredKind
+import com.roundsalmon4.monochrome.core.discovery.DiscoverySource
 import com.roundsalmon4.monochrome.ui.common.AlbumAvailabilityViewModel
 import com.roundsalmon4.monochrome.ui.common.AlbumStatusDot
 
@@ -47,6 +48,7 @@ fun SearchScreen(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
     onTrackClick: (List<Track>, Int) -> Unit,
+    onSourceCollection: (DiscoverySource, com.roundsalmon4.monochrome.core.discovery.DiscoveredItem) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
     availabilityViewModel: AlbumAvailabilityViewModel = hiltViewModel()
 ) {
@@ -121,7 +123,7 @@ fun SearchScreen(
                                         if (item.kind == DiscoveredKind.TRACK) {
                                             viewModel.playSourceItems(section.source, section.items, section.items.indexOf(item))
                                         } else {
-                                            viewModel.playContainer(section.source, item)
+                                            onSourceCollection(section.source, item)
                                         }
                                     }
                                 )
