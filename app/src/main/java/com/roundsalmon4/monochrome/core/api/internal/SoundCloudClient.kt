@@ -93,19 +93,29 @@ class SoundCloudClient @Inject constructor(
     internal suspend fun playlistTracksRaw(playlistId: String): List<Map<String, Any?>>? {
         val id = getValidClientId() ?: return null
         val url = "https://api-v2.soundcloud.com/playlists/$playlistId?client_id=$id"
-        val body = httpGetText(url) ?: return null
-        return runCatching {
+        val body = httpGetText(url) ?: run {
+            Log.w(TAG, "playlistTracksRaw($playlistId): request failed/unavailable")
+            return null
+        }
+        val items = runCatching {
             @Suppress("UNCHECKED_CAST")
             (gson.fromJson(body, Map::class.java)["tracks"] as? List<Map<String, Any?>>).orEmpty()
         }.getOrNull()
+        Log.d(TAG, "playlistTracksRaw($playlistId): ${items?.size ?: -1} item(s)")
+        return items
     }
 
     /** An artist's tracks (for playing an ARTIST discovery item). */
     internal suspend fun userTracksRaw(userId: String, limit: Int): List<Map<String, Any?>>? {
         val id = getValidClientId() ?: return null
         val url = "https://api-v2.soundcloud.com/users/$userId/tracks?client_id=$id&limit=$limit"
-        val body = httpGetText(url) ?: return null
-        return parseCollection(body)
+        val body = httpGetText(url) ?: run {
+            Log.w(TAG, "userTracksRaw($userId): request failed/unavailable")
+            return null
+        }
+        val items = parseCollection(body)
+        Log.d(TAG, "userTracksRaw($userId): ${items?.size ?: -1} item(s)")
+        return items
     }
 
     /** Raw track maps from the trending/top charts for the generic discovery layer. */

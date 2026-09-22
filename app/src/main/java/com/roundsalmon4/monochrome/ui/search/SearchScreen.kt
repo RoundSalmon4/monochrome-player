@@ -105,7 +105,14 @@ fun SearchScreen(
                             items(group, key = { it.id }) { item ->
                                 ListItem(
                                     headlineContent = { Text(item.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    supportingContent = { Text(item.artist) },
+                                    supportingContent = {
+                                        val detail = when (item.kind) {
+                                            DiscoveredKind.SET -> "Playlist · ${item.artist}"
+                                            DiscoveredKind.ARTIST -> "${item.artist} · play their tracks"
+                                            DiscoveredKind.TRACK -> item.artist
+                                        }
+                                        Text(detail)
+                                    },
                                     leadingContent = {
                                         AsyncImage(model = item.artworkUrl, contentDescription = null,
                                             modifier = Modifier.size(40.dp), contentScale = ContentScale.Crop)

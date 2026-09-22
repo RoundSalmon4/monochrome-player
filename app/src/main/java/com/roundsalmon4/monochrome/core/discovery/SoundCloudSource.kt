@@ -77,10 +77,16 @@ class SoundCloudSource @Inject constructor(
         Log.d(TAG, "expanding ${item.kind} '${item.title}' (id=${item.id})")
         val raws = when (item.kind) {
             DiscoveredKind.SET -> client.playlistTracksRaw(item.id)
-            DiscoveredKind.ARTIST -> client.userTracksRaw(item.id, 25)
+            DiscoveredKind.ARTIST -> client.userTracksRaw(item.id, 15)
             else -> null
         }
-        val items = raws.orEmpty().mapNotNull { toTrackItem(it) }
+        var items = raws.orEmpty().mapNotNull { toTrackItem(it) }
+        if (items.isEmpty()) {
+            // /users/{id}/tracks and /playlists/{id} often 404 or return shell
+            // accounts; fall back to a plain track search by the owner's name.
+            Log.w(TAG, "${item.kind} expansion empty for '${item.title}', falling back to track search")
+            items = client.searchRaw(item.title, 15).orEmpty().mapNotNull { toTrackItem(it) }
+        }
         Log.i(TAG, "expanded ${item.kind} '${item.title}' -> ${items.size} track(s)")
         return items
     }
