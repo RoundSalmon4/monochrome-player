@@ -75,7 +75,7 @@ class MonochromeSessionRefresher @Inject constructor(
     @Volatile private var hostDeadUntil = 0L
 
     /**
-     * Cheap DNS preflight so a retired/dead track-api domain fails fast instead of
+     * Cheap DNS preflight so an unreachable track-api domain fails fast instead of
      * paying for a full WebView Turnstile challenge every refresh cycle.
      */
     private suspend fun hostIsUp(): Boolean {
@@ -90,7 +90,7 @@ class MonochromeSessionRefresher @Inject constructor(
         }
         if (!alive) {
             hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
-            Log.w(TAG, "track-api.monochrome.tf unreachable (domain retired?), host marked down ${HOST_DEAD_MS / 60_000}min")
+            Log.w(TAG, "track-api.monochrome.tf unreachable (DNS failure), host marked down ${HOST_DEAD_MS / 60_000}min")
         }
         return alive
     }

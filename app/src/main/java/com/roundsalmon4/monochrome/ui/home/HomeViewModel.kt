@@ -63,7 +63,7 @@ class HomeViewModel @Inject constructor(
                 )
             } catch (e: java.net.UnknownHostException) {
                 hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
-                Log.w(TAG, "hot.monochrome.tf unreachable (domain retired?), skipping feed ${HOST_DEAD_MS / 60_000}min")
+                Log.w(TAG, "hot.monochrome.tf unreachable (DNS failure), skipping feed for ${HOST_DEAD_MS / 60_000}min")
                 _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false)
             } catch (e: Exception) {
                 Log.e(TAG, "Home refresh failed", e)
