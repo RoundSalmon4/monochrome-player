@@ -25,17 +25,11 @@ class BackendHealthChecker @Inject constructor(
         private const val TAG = "ChromePlayer-Health"
 
         internal val METADATA_INSTANCES = listOf(
-            "eu-central.monochrome.tf",
-            "us-west.monochrome.tf",
-            "arran.monochrome.tf",
-            "api.monochrome.tf",
             "monochrome-api.samidy.com",
-            "triton.squid.wtf",
             "wolf.qqdl.site",
             "maus.qqdl.site",
             "vogel.qqdl.site",
-            "hund.qqdl.site",
-            "tidal.kinoplus.online"
+            "hund.qqdl.site"
         )
     }
 

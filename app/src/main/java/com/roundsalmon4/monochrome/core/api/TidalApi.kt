@@ -5,7 +5,10 @@ import com.google.gson.JsonObject
 import com.roundsalmon4.monochrome.core.api.internal.MonochromePlaybackClient
 import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
+import com.roundsalmon4.monochrome.core.api.internal.TracksApiService
 import com.roundsalmon4.monochrome.core.api.internal.UnifiedPlaybackClient
+import com.roundsalmon4.monochrome.core.discovery.DiscoveredItem
+import com.roundsalmon4.monochrome.core.discovery.TracksApiSource
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,6 +57,7 @@ class TidalApi @Inject constructor(
     private val deezerProxyClient: DeezerProxyClient,
     private val internetArchiveClient: InternetArchiveClient,
     private val jioSaavnClient: JioSaavnClient,
+    private val tracksApiSource: TracksApiSource,
     @Named("api.instances") private val baseUrls: List<String>
 ) {
     private val services: List<TidalApiService> = baseUrls.map { url ->
@@ -64,6 +68,14 @@ class TidalApi @Inject constructor(
             .build()
             .create(TidalApiService::class.java)
     }
+
+    /** New official metadata API (tracks.monochrome.st) — primary source; classic instances are the fallback. */
+    private val tracksApi: TracksApiService = Retrofit.Builder()
+        .baseUrl("https://tracks.monochrome.st/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create(GsonBuilder().setLenient().create()))
+        .build()
+        .create(TracksApiService::class.java)
 
     private sealed class Res<out R> {
         class Ok<R>(val value: R) : Res<R>()
@@ -109,32 +121,163 @@ class TidalApi @Inject constructor(
         )
     }
 
-    suspend fun search(query: String): SearchResults = coroutineScope {
-        val tracksDef = async { trackResults { it.searchTracks(query) } }
-        val artistsDef = async { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
-        val albumsDef = async { tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
-        SearchResults(tracks = tracksDef.await(), artists = artistsDef.await(), albums = albumsDef.await())
+    // ---------------------------------------------------------------- tracks.monochrome.st
+    // Primary metadata source: Monochrome's new official Music API. Every method
+    // falls back to the classic instance pool (samidy etc.) when it fails, so a
+    // single outage never breaks browsing.
+
+    /** Cancellation-safe wrapper: new API first, classic instance pool on failure. */
+    private suspend fun <T> newApiTry(name: String, block: suspend () -> T, fallback: suspend () -> T): T = try {
+        block()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        android.util.Log.w("ChromePlayer-TidalApi", "tracks API $name failed (${e.message}); using classic instances")
+        fallback()
     }
 
-    suspend fun searchAlbums(query: String): List<Album> {
-        return tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
+    private fun JsonObject.mapArray(key: String): List<Map<String, Any?>> {
+        val arr = getAsJsonArray(key) ?: return emptyList()
+        val gson = Gson()
+        return arr.map { gson.fromJson(it, Map::class.java) }
     }
 
-    suspend fun searchTracks(query: String, offset: Int): List<Track> {
-        return trackResults { it.searchTracks(query, offset) }
+    private fun gsonMap(obj: JsonObject): Map<String, Any?> = Gson().fromJson(obj.toString(), Map::class.java)
+
+    private fun str(v: Any?): String? = v?.toString()?.takeIf { it.isNotBlank() }
+    private fun num(v: Any?): Long = when (v) { is Number -> v.toLong(); else -> 0L }
+
+    private fun trackFromTracksApi(m: Map<String, Any?>): Track? {
+        val id = str(m["trackId"] ?: m["id"]) ?: return null
+        val title = str(m["title"]) ?: return null
+        val artistName = (m["artistNames"] as? List<*>)?.firstOrNull()?.toString().orEmpty()
+            .ifBlank { "Unknown Artist" }
+        val artistId = (m["artistIds"] as? List<*>)?.firstOrNull()?.toString().orEmpty()
+        return Track(
+            id = id, title = title, artistName = artistName, artistId = artistId,
+            albumId = str(m["releaseId"]).orEmpty(), albumTitle = "",
+            coverUrl = str(m["artwork"]).orEmpty(),
+            durationMs = num(m["duration"]),
+            trackNumber = num(m["trackNumber"]).toInt(),
+            isrc = str(m["isrc"]).orEmpty()
+        )
     }
 
-    suspend fun searchArtists(query: String, offset: Int): List<Artist> {
-        return tryInstances { it.searchArtists(query, offset) }.data?.artists?.items.orEmpty().map { it.toArtist() }
+    private fun trackFromRelease(m: Map<String, Any?>, albumTitle: String, albumId: String): Track? {
+        val id = str(m["trackId"] ?: m["id"]) ?: return null
+        val title = str(m["title"]) ?: return null
+        @Suppress("UNCHECKED_CAST")
+        val artists = m["artists"] as? List<Map<String, Any?>>
+        val artistName = artists?.firstOrNull()?.let { str(it["name"]) ?: str(it["displayName"]) }
+            .orEmpty().ifBlank { "Unknown Artist" }
+        val artistId = artists?.firstOrNull()?.let { str(it["artistId"]) }.orEmpty()
+        return Track(
+            id = id, title = title, artistName = artistName, artistId = artistId,
+            albumId = albumId, albumTitle = albumTitle,
+            coverUrl = str(m["artwork"]).orEmpty(),
+            durationMs = num(m["duration"]),
+            trackNumber = num(m["trackNumber"]).toInt(),
+            isrc = str(m["isrc"]).orEmpty()
+        )
     }
 
-    suspend fun searchAlbums(query: String, offset: Int): List<Album> {
-        return tryInstances { it.searchAlbums(query, offset) }.data?.albums?.items.orEmpty().map { it.toAlbum() }
+    private fun albumFromRelease(m: Map<String, Any?>): Album {
+        val id = str(m["releaseId"] ?: m["id"]).orEmpty()
+        @Suppress("UNCHECKED_CAST")
+        val artists = m["artists"] as? List<Map<String, Any?>>
+        val artistNames = m["artistNames"] as? List<*>
+        val artistName = artists?.firstOrNull()?.let { str(it["name"]) }.orEmpty().ifBlank {
+            artistNames?.firstOrNull()?.toString().orEmpty().ifBlank { "Unknown Artist" }
+        }
+        val artistId = artists?.firstOrNull()?.let { str(it["artistId"]) }
+            ?: (m["artistIds"] as? List<*>)?.firstOrNull()?.toString().orEmpty()
+        return Album(
+            id = id,
+            title = str(m["title"]).orEmpty(),
+            artistName = artistName,
+            artistId = artistId,
+            coverUrl = str(m["artwork"]).orEmpty(),
+            year = str(m["releaseDate"])?.take(4)?.toIntOrNull() ?: 0,
+            trackCount = num(m["trackCount"]).toInt(),
+            durationMs = 0L
+        )
     }
 
-    suspend fun searchArtists(query: String): List<Artist> {
-        return tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() }
+    private fun artistFromTracksApi(m: Map<String, Any?>): Artist = Artist(
+        id = str(m["artistId"] ?: m["id"]).orEmpty(),
+        name = str(m["name"]) ?: str(m["displayName"]) ?: "Unknown",
+        imageUrl = str(m["avatar"]).orEmpty(),
+        albumCount = 0
+    )
+
+    private suspend fun newApiTracks(query: String, limit: Int, offset: Int): List<Track> =
+        tracksApi.searchTracks(query, limit, offset).mapArray("tracks").mapNotNull { trackFromTracksApi(it) }
+
+    private suspend fun newApiReleases(query: String, limit: Int, offset: Int): List<Album> =
+        tracksApi.searchReleases(query, limit, offset).mapArray("releases").map { albumFromRelease(it) }
+
+    private suspend fun newApiArtists(query: String, limit: Int, offset: Int): List<Artist> =
+        tracksApi.searchArtists(query, limit, offset).mapArray("artists").map { artistFromTracksApi(it) }
+
+    private suspend fun newApiGetAlbum(albumId: String): Pair<Album, List<Track>> {
+        val root = tracksApi.getRelease(albumId)
+        val album = albumFromRelease(gsonMap(root))
+        val tracks = root.mapArray("tracks").mapNotNull { trackFromRelease(it, album.title, album.id) }
+        android.util.Log.i("ChromePlayer-TidalApi", "tracks API getAlbum($albumId) -> '${album.title}' with ${tracks.size} track(s)")
+        return Pair(album, tracks)
     }
+
+    private suspend fun newApiGetArtist(artistId: String): Artist =
+        artistFromTracksApi(gsonMap(tracksApi.getArtist(artistId)))
+
+    private suspend fun newApiArtistAlbums(artistId: String): List<Album> {
+        val root = tracksApi.getArtist(artistId)
+        val releases = root.mapArray("releases").map { albumFromRelease(it) }
+        val albums = root.mapArray("albums").map { albumFromRelease(it) }
+        val combined = (releases + albums).distinctBy { it.id }
+        android.util.Log.i("ChromePlayer-TidalApi", "tracks API artistAlbums($artistId) -> ${combined.size} release(s)")
+        return combined
+    }
+
+    suspend fun search(query: String): SearchResults = newApiTry("search", {
+        SearchResults(
+            tracks = newApiTracks(query, 25, 0),
+            artists = newApiArtists(query, 25, 0),
+            albums = newApiReleases(query, 25, 0)
+        )
+    }, {
+        coroutineScope {
+            val tracksDef = async { trackResults { it.searchTracks(query) } }
+            val artistsDef = async { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
+            val albumsDef = async { tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
+            SearchResults(tracks = tracksDef.await(), artists = artistsDef.await(), albums = albumsDef.await())
+        }
+    })
+
+    suspend fun searchAlbums(query: String): List<Album> = newApiTry("searchAlbums",
+        { newApiReleases(query, 25, 0) },
+        { tryInstances { it.searchAlbums(query) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
+    )
+
+    suspend fun searchTracks(query: String, offset: Int): List<Track> = newApiTry("searchTracks",
+        { newApiTracks(query, 25, offset) },
+        { trackResults { it.searchTracks(query, offset) } }
+    )
+
+    suspend fun searchArtists(query: String, offset: Int): List<Artist> = newApiTry("searchArtists",
+        { newApiArtists(query, 25, offset) },
+        { tryInstances { it.searchArtists(query, offset) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
+    )
+
+    suspend fun searchAlbums(query: String, offset: Int): List<Album> = newApiTry("searchAlbums",
+        { newApiReleases(query, 25, offset) },
+        { tryInstances { it.searchAlbums(query, offset) }.data?.albums?.items.orEmpty().map { it.toAlbum() } }
+    )
+
+    suspend fun searchArtists(query: String): List<Artist> = newApiTry("searchArtists",
+        { newApiArtists(query, 25, 0) },
+        { tryInstances { it.searchArtists(query) }.data?.artists?.items.orEmpty().map { it.toArtist() } }
+    )
 
     /** Some instances (e.g. monochrome-api.samidy.com) return track search as a flat `data.items` array instead of `data.tracks.items`. */
     private suspend fun trackResults(block: suspend (TidalApiService) -> ApiResponse<SearchData>): List<Track> {
@@ -145,6 +288,13 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getAlbum(albumId: String): Pair<Album, List<Track>> {
+        try {
+            return newApiGetAlbum(albumId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("ChromePlayer-TidalApi", "tracks API getAlbum failed (${e.message}); using classic instances")
+        }
         val response = tryInstances { it.getAlbum(albumId) }
         val d = response.data ?: throw RuntimeException("Album not found")
         val album = d.toAlbum()
@@ -168,6 +318,13 @@ class TidalApi @Inject constructor(
     }
 
     suspend fun getArtist(artistId: String): Artist {
+        try {
+            return newApiGetArtist(artistId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("ChromePlayer-TidalApi", "tracks API getArtist failed (${e.message}); using classic instances")
+        }
         val json = tryInstances { it.getArtist(artistId) }
         // Handle both {"version":"2.x","data":{"id":...,"name":...}} and
         // {"version":"2.x","artist":{"id":...,"name":...},"cover":{...}} formats
@@ -178,10 +335,13 @@ class TidalApi @Inject constructor(
         return detail.toArtist()
     }
 
-    suspend fun getArtistAlbums(artistId: String): List<Album> {
-        val response = tryInstances { it.getArtistAlbums(artistId) }
-        return response.albums?.items.orEmpty().map { it.toAlbum() }
-    }
+    suspend fun getArtistAlbums(artistId: String): List<Album> = newApiTry("getArtistAlbums",
+        { newApiArtistAlbums(artistId) },
+        {
+            val response = tryInstances { it.getArtistAlbums(artistId) }
+            response.albums?.items.orEmpty().map { it.toAlbum() }
+        }
+    )
 
     suspend fun getTrackStreamUrl(track: Track): StreamUrl {
         val chainStart = System.currentTimeMillis()
@@ -193,6 +353,30 @@ class TidalApi @Inject constructor(
         fun elapsed(): Boolean = System.currentTimeMillis() - chainStart > maxChainMs
 
         fun remaining(): Long = maxOf(1_000L, maxChainMs - (System.currentTimeMillis() - chainStart))
+
+        // 0a. Monochrome Tracks API (tracks.monochrome.st): official lossless FLAC,
+        // direct. Only valid for ids minted by the new API (18-digit); classic
+        // TIDAL ids (9-10 digits) skip this probe entirely.
+        if (track.id.length >= 15) {
+            try {
+                val resolved = withTimeout(remaining()) {
+                    tracksApiSource.resolveStream(
+                        DiscoveredItem(id = track.id, title = track.title, artist = track.artistName)
+                    )
+                }
+                if (resolved != null) {
+                    logResolved("TracksApi", chainStart, resolved.url, resolved.mimeType)
+                    return StreamUrl(url = resolved.url, mimeType = resolved.mimeType)
+                }
+                android.util.Log.w("ChromePlayer-TidalApi", "Tracks API stream unavailable for id=${track.id}")
+            } catch (e: Exception) {
+                android.util.Log.w("ChromePlayer-TidalApi", "Tracks API stream failed: ${e.message}")
+            }
+            if (elapsed()) {
+                android.util.Log.w("ChromePlayer", "Chain budget exhausted after TracksApi")
+                throw trackNotFound(track, listOf("Monochrome Tracks" to true))
+            }
+        }
 
         // 0. Monochrome Playback: in-house lossless source
         monochromeSessionRefresher.startAutoRefresh()
