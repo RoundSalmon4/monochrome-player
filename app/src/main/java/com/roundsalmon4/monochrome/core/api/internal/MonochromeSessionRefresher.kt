@@ -32,6 +32,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.net.InetAddress
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -59,6 +60,7 @@ class MonochromeSessionRefresher @Inject constructor(
         private const val CHECK_INTERVAL_MS = 5 * 60 * 1000L
         private const val TURNSTILE_TIMEOUT_MS = 30_000L
         private const val FAILURE_COOLDOWN_MS = 3 * 60 * 1000L
+        private const val HOST_DEAD_MS = 5 * 60 * 1000L
         private val CHROME_UA =
             "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
     }
@@ -70,6 +72,28 @@ class MonochromeSessionRefresher @Inject constructor(
     val status: StateFlow<MonochromeSessionStatus> = _status.asStateFlow()
     @Volatile private var autoRefreshStarted = false
     @Volatile private var lastFailureAt = 0L
+    @Volatile private var hostDeadUntil = 0L
+
+    /**
+     * Cheap DNS preflight so a retired/dead track-api domain fails fast instead of
+     * paying for a full WebView Turnstile challenge every refresh cycle.
+     */
+    private suspend fun hostIsUp(): Boolean {
+        if (System.currentTimeMillis() < hostDeadUntil) return false
+        val alive = try {
+            withContext(Dispatchers.IO) {
+                InetAddress.getByName("track-api.monochrome.tf")
+                true
+            }
+        } catch (_: Exception) {
+            false
+        }
+        if (!alive) {
+            hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
+            Log.w(TAG, "track-api.monochrome.tf unreachable (domain retired?), host marked down ${HOST_DEAD_MS / 60_000}min")
+        }
+        return alive
+    }
 
     /** Returns a usable session token, obtaining or refreshing one silently if the stored one is missing or close to expiry. */
     suspend fun getValidToken(): String? {
@@ -101,6 +125,11 @@ class MonochromeSessionRefresher @Inject constructor(
 
     /** Force a fresh session exchange through the Turnstile WebView flow. Safe to call concurrently. */
     suspend fun refresh(): String? = refreshMutex.withLock {
+        if (!hostIsUp()) {
+            lastFailureAt = System.currentTimeMillis()
+            _status.value = MonochromeSessionStatus.Failed("track-api.monochrome.tf unreachable")
+            return null
+        }
         val now = System.currentTimeMillis()
         if (now - lastFailureAt < FAILURE_COOLDOWN_MS) {
             val remaining = (FAILURE_COOLDOWN_MS - (now - lastFailureAt)) / 1000

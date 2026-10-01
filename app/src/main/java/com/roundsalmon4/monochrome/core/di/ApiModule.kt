@@ -17,14 +17,13 @@ import java.util.concurrent.TimeUnit
 @InstallIn(SingletonComponent::class)
 object ApiModule {
 
+    // The *.monochrome.tf zone was retired when Monochrome moved to monochrome.st;
+    // only the unofficial mirrors and community instances below still resolve.
+    // Checked in parallel with first-success semantics (see TidalApi.tryInstances).
     @Provides
     @Singleton
     @Named("api.instances")
     fun provideApiInstances(): List<String> = listOf(
-        "https://eu-central.monochrome.tf/",
-        "https://us-west.monochrome.tf/",
-        "https://arran.monochrome.tf/",
-        "https://api.monochrome.tf/",
         "https://monochrome-api.samidy.com/",
         "https://triton.squid.wtf/",
         "https://wolf.qqdl.site/",

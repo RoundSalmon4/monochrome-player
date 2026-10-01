@@ -29,8 +29,16 @@ class HomeViewModel @Inject constructor(
     private val okHttpClient: OkHttpClient
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "ChromePlayer-Home"
+        private const val HOST_DEAD_MS = 5 * 60 * 1000L
+    }
+
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    @Volatile
+    private var hostDeadUntil = 0L
 
     /** Reloads trending/new albums. Shows a full-screen spinner when there's no data yet, otherwise a pull-to-refresh indicator. */
     fun refresh() {
@@ -41,6 +49,11 @@ class HomeViewModel @Inject constructor(
                 isRefreshing = hasData,
                 error = null
             )
+            if (!hostIsUp()) {
+                // Feed domain retired (Monochrome moved to monochrome.st); skip quietly.
+                _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false)
+                return@launch
+            }
             try {
                 val albums = fetchTopAlbums()
                 _uiState.value = _uiState.value.copy(
@@ -48,8 +61,12 @@ class HomeViewModel @Inject constructor(
                     isRefreshing = false,
                     newReleases = albums
                 )
+            } catch (e: java.net.UnknownHostException) {
+                hostDeadUntil = System.currentTimeMillis() + HOST_DEAD_MS
+                Log.w(TAG, "hot.monochrome.tf unreachable (domain retired?), skipping feed ${HOST_DEAD_MS / 60_000}min")
+                _uiState.value = _uiState.value.copy(isLoading = false, isRefreshing = false)
             } catch (e: Exception) {
-                Log.e("ChromePlayer", "Home refresh failed", e)
+                Log.e(TAG, "Home refresh failed", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
@@ -57,6 +74,14 @@ class HomeViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    private suspend fun hostIsUp(): Boolean {
+        if (System.currentTimeMillis() < hostDeadUntil) {
+            Log.d(TAG, "feed host in dead cooldown, skipping refresh")
+            return false
+        }
+        return true
     }
 
     private suspend fun fetchTopAlbums(): List<Album> = withContext(Dispatchers.IO) {
