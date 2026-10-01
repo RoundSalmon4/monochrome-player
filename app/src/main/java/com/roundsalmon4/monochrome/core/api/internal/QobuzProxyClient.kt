@@ -50,7 +50,7 @@ class QobuzProxyClient @Inject constructor(
         private data class Backend(val key: String, val base: String)
 
         private val BACKENDS = listOf(
-            Backend("squid", "https://qobuz.squid.wtf"),
+            // qobuz.squid.wtf removed: NXDOMAIN (verified via three resolvers).
             Backend("monokenny", "https://qobuz.kennyy.com.br"),
             Backend("trypt", "https://trypt-hifi-dl-456461932686.us-west1.run.app"),
             Backend("jumo", "https://jumo-dl.pages.dev")
@@ -388,7 +388,7 @@ class QobuzProxyClient @Inject constructor(
             .header("Accept", "application/json")
             .header("Referer", "${backend.base}/")
             .header("User-Agent", BROWSER_UA)
-        if (backend.key == "squid" || backend.key == "trypt") {
+        if (backend.key == "trypt") {
             requestBuilder.header("Token-Country", DEFAULT_COUNTRY)
         }
         return withContext(Dispatchers.IO) {

@@ -13,6 +13,7 @@ import javax.inject.Singleton
 /** Holds every pluggable [DiscoverySource] and reports which ones are currently available. */
 @Singleton
 class SourceDiscoveryRegistry @Inject constructor(
+    tracksApi: TracksApiSource,
     soundCloud: SoundCloudSource,
     jioSaavn: JioSaavnSource,
     internetArchive: InternetArchiveSource
@@ -21,7 +22,7 @@ class SourceDiscoveryRegistry @Inject constructor(
         private const val TAG = "ChromePlayer-Discovery"
     }
 
-    val all: List<DiscoverySource> = listOf(soundCloud, jioSaavn, internetArchive)
+    val all: List<DiscoverySource> = listOf(tracksApi, soundCloud, jioSaavn, internetArchive)
 
     suspend fun available(): List<DiscoverySource> {
         val available = all.filter { it.isAvailable() }

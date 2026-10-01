@@ -20,21 +20,18 @@ object ApiModule {
     // Mirrors upstream public/instances.json; every instance is tried in parallel
     // with first-success semantics (see TidalApi.tryInstances), so failing or
     // unreachable instances add no latency to the winning request.
+    // Note: only hosts that resolve in DNS are listed; the *.monochrome.tf
+    // instances were retired with the move to monochrome.st (verified via NS
+    // + three resolvers: NXDOMAIN for every subdomain).
     @Provides
     @Singleton
     @Named("api.instances")
     fun provideApiInstances(): List<String> = listOf(
-        "https://eu-central.monochrome.tf/",
-        "https://us-west.monochrome.tf/",
-        "https://arran.monochrome.tf/",
-        "https://api.monochrome.tf/",
         "https://monochrome-api.samidy.com/",
-        "https://triton.squid.wtf/",
         "https://wolf.qqdl.site/",
         "https://maus.qqdl.site/",
         "https://vogel.qqdl.site/",
-        "https://hund.qqdl.site/",
-        "https://tidal.kinoplus.online/"
+        "https://hund.qqdl.site/"
     )
 
     @Provides
