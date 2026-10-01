@@ -1,4 +1,4 @@
-package com.roundsalmon4.monochrome.core.datastore
+﻿package com.roundsalmon4.monochrome.core.datastore
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -31,14 +31,8 @@ private object Keys {
     val COLOR_SCHEME_MODE = stringPreferencesKey("color_scheme_mode")
     val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
     val BACKGROUND_AVAILABILITY = booleanPreferencesKey("background_availability")
-    val AMAZON_JWT = stringPreferencesKey("amazon_jwt")
-    val AMAZON_JWT_EXPIRY = stringPreferencesKey("amazon_jwt_expiry")
-    val MONOCHROME_JWT = stringPreferencesKey("monochrome_jwt")
-    val MONOCHROME_JWT_EXPIRY = stringPreferencesKey("monochrome_jwt_expiry")
     val SAVED_QUEUE = stringPreferencesKey("saved_queue")
     val VOLUME = floatPreferencesKey("volume")
-    val UNIFIED_JWT = stringPreferencesKey("unified_jwt")
-    val UNIFIED_JWT_EXPIRY = stringPreferencesKey("unified_jwt_expiry")
 }
 
 data class PreferencesUiState(
@@ -120,34 +114,6 @@ class PlayerPreferences @Inject constructor(
         context.playerDataStore.edit { it[Keys.BACKGROUND_AVAILABILITY] = enabled }
     }
 
-    suspend fun setAmazonJwt(jwt: String, expiryTimestamp: Long) {
-        context.playerDataStore.edit {
-            it[Keys.AMAZON_JWT] = jwt
-            it[Keys.AMAZON_JWT_EXPIRY] = expiryTimestamp.toString()
-        }
-    }
-
-    suspend fun getAmazonJwt(): Pair<String, Long>? {
-        val prefs = context.playerDataStore.data.first()
-        val jwt = prefs[Keys.AMAZON_JWT] ?: return null
-        val expiry = prefs[Keys.AMAZON_JWT_EXPIRY]?.toLongOrNull() ?: 0L
-        return Pair(jwt, expiry)
-    }
-
-    suspend fun setMonochromeJwt(jwt: String, expiryTimestamp: Long) {
-        context.playerDataStore.edit {
-            it[Keys.MONOCHROME_JWT] = jwt
-            it[Keys.MONOCHROME_JWT_EXPIRY] = expiryTimestamp.toString()
-        }
-    }
-
-    suspend fun getMonochromeJwt(): Pair<String, Long>? {
-        val prefs = context.playerDataStore.data.first()
-        val jwt = prefs[Keys.MONOCHROME_JWT] ?: return null
-        val expiry = prefs[Keys.MONOCHROME_JWT_EXPIRY]?.toLongOrNull() ?: 0L
-        return Pair(jwt, expiry)
-    }
-
     suspend fun setSavedQueueJson(json: String?) {
         context.playerDataStore.edit {
             if (json == null) it.remove(Keys.SAVED_QUEUE) else it[Keys.SAVED_QUEUE] = json
@@ -156,18 +122,5 @@ class PlayerPreferences @Inject constructor(
 
     suspend fun getSavedQueueJson(): String? =
         context.playerDataStore.data.first()[Keys.SAVED_QUEUE]
-
-    suspend fun setUnifiedJwt(jwt: String, expiryTimestamp: Long) {
-        context.playerDataStore.edit {
-            it[Keys.UNIFIED_JWT] = jwt
-            it[Keys.UNIFIED_JWT_EXPIRY] = expiryTimestamp.toString()
-        }
-    }
-
-    suspend fun getUnifiedJwt(): Pair<String, Long>? {
-        val prefs = context.playerDataStore.data.first()
-        val jwt = prefs[Keys.UNIFIED_JWT] ?: return null
-        val expiry = prefs[Keys.UNIFIED_JWT_EXPIRY]?.toLongOrNull() ?: 0L
-        return Pair(jwt, expiry)
-    }
 }
+

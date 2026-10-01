@@ -4,9 +4,6 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
-import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
-import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionStatus
 import com.roundsalmon4.monochrome.core.database.ExportData
 import com.roundsalmon4.monochrome.core.database.HistoryDao
 import com.roundsalmon4.monochrome.core.database.LocalPlaylistExport
@@ -34,8 +31,6 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val playerPreferences: PlayerPreferences,
-    private val amazonMusicClient: AmazonMusicClient,
-    private val monochromeSessionRefresher: MonochromeSessionRefresher,
     private val historyDao: HistoryDao,
     private val playlistDao: PlaylistDao,
     private val subscriptionDao: SubscriptionDao
@@ -56,19 +51,9 @@ class SettingsViewModel @Inject constructor(
     private val _importResult = MutableStateFlow<String?>(null)
     val importResult: StateFlow<String?> = _importResult.asStateFlow()
 
-    private val _monochromeStatus = MutableStateFlow<MonochromeSessionStatus>(MonochromeSessionStatus.Unknown)
-    val monochromeStatus: StateFlow<MonochromeSessionStatus> = _monochromeStatus.asStateFlow()
-
-    private val _monochromeRefreshing = MutableStateFlow(false)
-    val monochromeRefreshing: StateFlow<Boolean> = _monochromeRefreshing.asStateFlow()
-
     init {
         viewModelScope.launch {
             playerPreferences.uiState.collect { _uiState.value = it }
-        }
-        monochromeSessionRefresher.startAutoRefresh()
-        viewModelScope.launch {
-            monochromeSessionRefresher.status.collect { _monochromeStatus.value = it }
         }
     }
 
@@ -182,31 +167,6 @@ class SettingsViewModel @Inject constructor(
     fun setBackgroundAvailability(enabled: Boolean) =
         viewModelScope.launch { playerPreferences.setBackgroundAvailability(enabled) }
 
-    fun setAmazonJwt(jwt: String) = viewModelScope.launch {
-        val expiry = try {
-            val parts = jwt.split(".")
-            val json = String(android.util.Base64.decode(parts[1].padEnd(parts[1].length + (4 - parts[1].length % 4) % 4, '='), android.util.Base64.DEFAULT))
-            val exp = com.google.gson.Gson().fromJson(json, Map::class.java)["exp"]
-            (exp as? Number)?.toLong()?.times(1000L) ?: 0L
-        } catch (_: Exception) { 0L }
-        playerPreferences.setAmazonJwt(jwt, expiry)
-        amazonMusicClient.setJwt(jwt, expiry)
-    }
-
-    fun refreshMonochromeSession() = viewModelScope.launch {
-        _monochromeRefreshing.value = true
-        try {
-            monochromeSessionRefresher.refresh()
-        } finally {
-            _monochromeRefreshing.value = false
-        }
-    }
-
-    fun setMonochromeJwt(jwt: String) = viewModelScope.launch {
-        if (jwt.isBlank()) return@launch
-        monochromeSessionRefresher.setManualJwt(jwt.trim())
-    }
-
     fun showClearHistoryDialog() { _showClearHistoryDialog.value = true }
     fun dismissClearHistoryDialog() { _showClearHistoryDialog.value = false }
     fun showClearPlaylistsDialog() { _showClearPlaylistsDialog.value = true }
@@ -228,4 +188,5 @@ class SettingsViewModel @Inject constructor(
         _showClearPlaylistsDialog.value = false
     }
 }
+
 

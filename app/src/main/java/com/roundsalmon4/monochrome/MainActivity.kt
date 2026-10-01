@@ -22,8 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
-import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
-import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.datastore.PlayerPreferences
 import com.roundsalmon4.monochrome.core.datastore.PreferencesUiState
 import com.roundsalmon4.monochrome.player.PlayerEngineController
@@ -45,12 +43,6 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var playerController: PlayerEngineController
 
-    @Inject
-    lateinit var amazonMusicClient: AmazonMusicClient
-
-    @Inject
-    lateinit var monochromeSessionRefresher: MonochromeSessionRefresher
-
     @Volatile
     private var pipEnabled = true
 
@@ -65,19 +57,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestNotificationPermission()
-        monochromeSessionRefresher.startAutoRefresh()
-        lifecycleScope.launch {
-            monochromeSessionRefresher.getValidToken()
-        }
         lifecycleScope.launch {
             playerPreferences.uiState.collect { pipEnabled = it.pipEnabled }
-        }
-        lifecycleScope.launch {
-            val saved = playerPreferences.getAmazonJwt()
-            if (saved != null && System.currentTimeMillis() < saved.second) {
-                amazonMusicClient.setJwt(saved.first, saved.second)
-                android.util.Log.d("ChromePlayer", "Loaded Amazon JWT from preferences")
-            }
         }
         lifecycle.addObserver(LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_DESTROY) {

@@ -2,11 +2,8 @@
 
 import com.google.gson.Gson
 import com.google.gson.JsonObject
-import com.roundsalmon4.monochrome.core.api.internal.MonochromePlaybackClient
-import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionRefresher
 import com.roundsalmon4.monochrome.core.api.internal.TidalApiService
 import com.roundsalmon4.monochrome.core.api.internal.TracksApiService
-import com.roundsalmon4.monochrome.core.api.internal.UnifiedPlaybackClient
 import com.roundsalmon4.monochrome.core.discovery.DiscoveredItem
 import com.roundsalmon4.monochrome.core.discovery.TracksApiSource
 import kotlinx.coroutines.CoroutineScope
@@ -19,7 +16,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import com.roundsalmon4.monochrome.core.api.internal.AmazonMusicClient
 import com.roundsalmon4.monochrome.core.api.internal.SoundCloudClient
 import com.roundsalmon4.monochrome.core.api.internal.DeezerProxyClient
 import com.roundsalmon4.monochrome.core.api.internal.InternetArchiveClient
@@ -48,10 +44,6 @@ import javax.inject.Singleton
 @Singleton
 class TidalApi @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val amazonMusicClient: AmazonMusicClient,
-    private val monochromePlaybackClient: MonochromePlaybackClient,
-    private val monochromeSessionRefresher: MonochromeSessionRefresher,
-    private val unifiedPlaybackClient: UnifiedPlaybackClient,
     private val soundCloudClient: SoundCloudClient,
     private val qobuzProxyClient: QobuzProxyClient,
     private val deezerProxyClient: DeezerProxyClient,
@@ -383,38 +375,6 @@ class TidalApi @Inject constructor(
             }
         }
 
-        // 0. Monochrome Playback: in-house lossless source
-        monochromeSessionRefresher.startAutoRefresh()
-        try {
-            monochromeSessionRefresher.getValidToken()
-            val result = withTimeout(remaining()) {
-                monochromePlaybackClient.getStreamUrl(
-                    title = track.title, artist = track.artistName,
-                    isrc = track.isrc, durationMs = track.durationMs
-                )
-            }
-            if (result != null) {
-                logResolved("Monochrome", chainStart, result.url, result.mimeType)
-                return StreamUrl(url = result.url, mimeType = result.mimeType)
-            }
-        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Monochrome Playback failed: ${e.message}") }
-        val monoNotFound = monochromePlaybackClient.wasNotFound
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Monochrome"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound)) }
-        // 0b. Unified Playback (music-api.geeked.wtf): consolidated Amazon/Monochrome/Qobuz source
-        try {
-            val result = withTimeout(remaining()) {
-                unifiedPlaybackClient.getStreamUrl(
-                    title = track.title, artist = track.artistName,
-                    isrc = track.isrc, durationMs = track.durationMs
-                )
-            }
-            if (result != null) {
-                logResolved("Unified", chainStart, result.url, result.mimeType)
-                return StreamUrl(url = result.url, mimeType = result.mimeType)
-            }
-        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Unified Playback failed: ${e.message}") }
-        val unifiedNotFound = unifiedPlaybackClient.wasNotFound
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Unified"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound)) }
         // 0c. SoundCloud: free catalog, no ISRC or auth required
         try {
             val result = withTimeout(remaining()) {
@@ -426,7 +386,7 @@ class TidalApi @Inject constructor(
             }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "SoundCloud failed: ${e.message}") }
         val scNotFound = soundCloudClient.wasNotFound
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound)) }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after SoundCloud"); throw trackNotFound(track, listOf("SoundCloud" to scNotFound)) }
         // 1. Qobuz: direct FLAC, no DRM
         var qobuzNotFound = false
         var deezerNotFound = false
@@ -447,7 +407,7 @@ class TidalApi @Inject constructor(
                 }
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Qobuz failed: ${e.message}") }
             qobuzNotFound = qobuzProxyClient.wasNotFound
-            if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound)) }
+            if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Qobuz"); throw trackNotFound(track, listOf("SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound)) }
             // 2. Deezer: backup
             try {
                 val url = withTimeout(remaining()) { deezerProxyClient.getStreamUrl(track.isrc) }
@@ -458,7 +418,7 @@ class TidalApi @Inject constructor(
             } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Deezer failed: ${e.message}") }
             deezerNotFound = deezerProxyClient.wasNotFound
         }
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound)) }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Deezer"); throw trackNotFound(track, listOf("SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound)) }
         // 2b. Internet Archive: free lossless (FLAC) backup, no sign-up or auth
         try {
             val result = withTimeout(remaining()) {
@@ -470,7 +430,7 @@ class TidalApi @Inject constructor(
             }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Internet Archive failed: ${e.message}") }
         val iaNotFound = internetArchiveClient.wasNotFound
-        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Internet Archive"); throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound)) }
+        if (elapsed()) { android.util.Log.w("ChromePlayer", "Chain budget exhausted after Internet Archive"); throw trackNotFound(track, listOf("SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound)) }
         // 2c. JioSaavn: free AAC 320 backup, no sign-up or auth
         try {
             val result = withTimeout(remaining()) {
@@ -487,15 +447,7 @@ class TidalApi @Inject constructor(
             }
         } catch (e: Exception) { android.util.Log.w("ChromePlayer", "JioSaavn failed: ${e.message}") }
         val jioSaavnNotFound = jioSaavnClient.wasNotFound
-        // 3. Amazon Music: last resort
-        try {
-            val url = withTimeout(minOf(12_000L, remaining())) { getAmazonStreamUrl(track.id) }
-            if (url != null) {
-                logResolved("Amazon", chainStart, url, "audio/mp4")
-                return StreamUrl(url = url, mimeType = "audio/mp4")
-            }
-        } catch (e: Exception) { android.util.Log.w("ChromePlayer", "Amazon Music failed: ${e.message}") }
-        throw trackNotFound(track, listOf("Monochrome" to monoNotFound, "Unified" to unifiedNotFound, "SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound, "JioSaavn" to jioSaavnNotFound))
+        throw trackNotFound(track, listOf("SoundCloud" to scNotFound, "Qobuz" to qobuzNotFound, "Deezer" to deezerNotFound, "Internet Archive" to iaNotFound, "JioSaavn" to jioSaavnNotFound))
     }
 
     private fun trackNotFound(track: Track, notFoundFlags: List<Pair<String, Boolean>>): RuntimeException {
@@ -580,18 +532,6 @@ class TidalApi @Inject constructor(
         }
     }
 
-    private suspend fun getAmazonStreamUrl(trackId: String): String? {
-        android.util.Log.d("ChromePlayer", "Amazon: trying track $trackId via Turnstile auth")
-        try {
-            val url = amazonMusicClient.getStreamUrl(trackId)
-            if (url != null) android.util.Log.d("ChromePlayer", "Amazon: got stream URL")
-            return url
-        } catch (e: Exception) {
-            android.util.Log.w("ChromePlayer", "Amazon: failed: ${e.message}")
-        }
-        return null
-    }
-
     private fun albumCoverUrl(cover: String?): String {
         if (cover.isNullOrBlank()) return ""
         if (cover.startsWith("http")) return cover
@@ -606,3 +546,5 @@ class TidalApi @Inject constructor(
         return "https://resources.tidal.com/images/$path/320x320.jpg"
     }
 }
+
+

@@ -68,11 +68,7 @@ class BackendHealthChecker @Inject constructor(
             )
         }
         add(Target("Home", "hot.monochrome.tf", "https://hot.monochrome.tf/"))
-        add(Target("Playback", "Monochrome session", "https://track-api.monochrome.tf/config"))
-        add(Target("Playback", "Monochrome CDN", "https://tracks.monochrome.tf/"))
         add(Target("Playback", "Monochrome Tracks API", "https://tracks.monochrome.st/search/tracks?q=health&limit=1"))
-        add(Target("Playback", "Unified (geeked)", "https://music-api.geeked.wtf/"))
-        add(Target("Playback", "Amazon (geeked)", "https://amz.geeked.wtf/"))
         add(Target("Sources", "SoundCloud", "https://soundcloud.com/", kind = ProbeKind.SOUNDCLOUD))
         add(Target("Sources", "Qobuz - Squid", "https://qobuz.squid.wtf/api/get-music?q=health"))
         add(Target("Sources", "Qobuz - Monokenny", "https://qobuz.kennyy.com.br/api/get-music?q=health"))

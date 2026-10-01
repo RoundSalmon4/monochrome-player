@@ -70,7 +70,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.roundsalmon4.monochrome.core.api.internal.MonochromeSessionStatus
 import com.roundsalmon4.monochrome.core.datastore.PreferencesUiState
 import kotlinx.coroutines.launch
 
@@ -100,8 +99,6 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             PlayerSection(uiState, viewModel)
-            MonochromeSection(viewModel)
-            AmazonSection(viewModel)
             AppearanceSection(uiState, viewModel)
             DataSection(viewModel, exportResult, importResult)
             BackendsSection()
@@ -466,92 +463,6 @@ private fun AboutSection(onCreditsClick: () -> Unit) {
             supportingContent = { Text("Third-party projects and libraries used by ChromePlayer") },
             trailingContent = { Icon(Icons.Filled.Info, contentDescription = null) }
         )
-    }
-}
-
-@Composable
-private fun MonochromeSection(viewModel: SettingsViewModel) {
-    val monochromeStatus by viewModel.monochromeStatus.collectAsState()
-    val monochromeRefreshing by viewModel.monochromeRefreshing.collectAsState()
-    var jwtInput by remember { mutableStateOf("") }
-    var showManualEntry by remember { mutableStateOf(false) }
-
-    Column {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsCategory("Monochrome Playback")
-
-        val status = monochromeStatus
-        val statusText = when (status) {
-            is MonochromeSessionStatus.Valid -> "Session active"
-            is MonochromeSessionStatus.Expired -> "Session expired"
-            is MonochromeSessionStatus.Refreshing -> "Refreshing session..."
-            is MonochromeSessionStatus.Failed -> "Failed: ${status.error}"
-            is MonochromeSessionStatus.Unknown -> "No session yet"
-        }
-        ListItem(
-            headlineContent = { Text("Session status", fontWeight = FontWeight.SemiBold) },
-            supportingContent = { Text(statusText) }
-        )
-
-        TextButton(
-            enabled = !monochromeRefreshing,
-            onClick = { viewModel.refreshMonochromeSession() }
-        ) {
-            Text(if (monochromeRefreshing) "Refreshing..." else "Refresh token now")
-        }
-
-        TextButton(
-            onClick = { showManualEntry = !showManualEntry }
-        ) {
-            Text(if (showManualEntry) "Hide manual entry" else "Paste token manually")
-        }
-
-        if (showManualEntry) {
-            if (jwtInput.isNotEmpty()) {
-                TextButton(onClick = { viewModel.setMonochromeJwt(jwtInput.trim()); jwtInput = "" }) {
-                    Text("Save token")
-                }
-            }
-            OutlinedTextField(
-                value = jwtInput,
-                onValueChange = { jwtInput = it },
-                label = { Text("Monochrome Playback token (eyJ...)") },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                singleLine = true
-            )
-        }
-
-        Text("Playback uses the in-house lossless source. The token auto-refreshes every ~45 minutes; open https://monochrome.tf in your phone browser if manual entry is needed.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AmazonSection(viewModel: SettingsViewModel) {
-    var jwtInput by remember { mutableStateOf("") }
-    Column {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-        SettingsCategory("Amazon Music Streaming")
-
-        if (jwtInput.isNotEmpty()) {
-            TextButton(onClick = { viewModel.setAmazonJwt(jwtInput.trim()); jwtInput = "" }) {
-                Text("Save JWT")
-            }
-        }
-
-        OutlinedTextField(
-            value = jwtInput,
-            onValueChange = { jwtInput = it },
-            label = { Text("Amazon JWT (from browser localStorage)") },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            singleLine = true
-        )
-
-        Text("Also check localStorage for amazon-music-turnstile-bypass-token",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
     }
 }
 
