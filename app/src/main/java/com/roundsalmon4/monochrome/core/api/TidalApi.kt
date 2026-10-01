@@ -139,10 +139,15 @@ class TidalApi @Inject constructor(
     private fun JsonObject.mapArray(key: String): List<Map<String, Any?>> {
         val arr = getAsJsonArray(key) ?: return emptyList()
         val gson = Gson()
-        return arr.map { gson.fromJson(it, Map::class.java) }
+        val type = object : com.google.gson.reflect.TypeToken<Map<String, Any?>>() {}.type
+        return arr.map { gson.fromJson<Map<String, Any?>>(it, type) }
     }
 
-    private fun gsonMap(obj: JsonObject): Map<String, Any?> = Gson().fromJson(obj.toString(), Map::class.java)
+    private fun gsonMap(obj: JsonObject): Map<String, Any?> {
+        val gson = Gson()
+        val type = object : com.google.gson.reflect.TypeToken<Map<String, Any?>>() {}.type
+        return gson.fromJson<Map<String, Any?>>(obj.toString(), type)
+    }
 
     private fun str(v: Any?): String? = v?.toString()?.takeIf { it.isNotBlank() }
     private fun num(v: Any?): Long = when (v) { is Number -> v.toLong(); else -> 0L }
